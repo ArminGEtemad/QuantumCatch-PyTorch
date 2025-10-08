@@ -36,9 +36,7 @@ def calc_super_liou(h_, c_ops):
         op_super[:, j] = rho_dot
     return op_super
 
-
 # Test
-
 def test_liouvillian_superoperator_matches_reference():
     # PyTorch inputs
     h = torch.tensor([[1.0, 0.0], [0.0, -1.0]], dtype=torch.cfloat)
