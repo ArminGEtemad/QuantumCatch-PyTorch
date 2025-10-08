@@ -37,20 +37,37 @@ def calc_super_liou(h_, c_ops):
     return op_super
 
 # Test
-def test_liouvillian_superoperator_matches_reference():
-    # PyTorch inputs
-    h = torch.tensor([[1.0, 0.0], [0.0, -1.0]], dtype=torch.cfloat)
-    c_ops = [torch.tensor([[0.0, 1.0], [0.0, 0.0]], dtype=torch.cfloat)]
-    m_ops = [torch.tensor([[0.0, 0.0], [1.0, 0.0]], dtype=torch.cfloat)]
+@pytest.mark.parametrize("seed", range(10))  # Run the test 10 times with different seeds
+def test_random_liouvillian_matches_reference(seed):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
 
-    gamma = [1.0]
-    beta = [1.0]
+    dim = 3  # small for speed without loss of generality
+    num_collapse = 2
+    num_measure = 2
 
-    L_torch = liouvillian_superoperator(h, c_ops, m_ops, gamma, beta) # pytorch implementation
-    L_np = calc_super_liou(
-        h.numpy(), 
-        [op.numpy() for op in c_ops + m_ops]
-    ) # old algorithm
+    # Generate random Hermitian Hamiltonian
+    A = np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim)
+    H_np = (A + A.conj().T) / 2
 
-    assert L_torch.shape == L_np.shape
+    # Random collapse and measurement operators (non-Hermitian allowed)
+    c_ops_np = [np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim) for _ in range(num_collapse)]
+    m_ops_np = [np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim) for _ in range(num_measure)]
+
+    # Reference Liouvillian using NumPy
+    L_np = calc_super_liou(H_np, c_ops_np + m_ops_np)
+
+    # Convert to PyTorch tensors
+    H_torch = torch.tensor(H_np, dtype=torch.cfloat)
+    c_ops_torch = [torch.tensor(op, dtype=torch.cfloat) for op in c_ops_np]
+    m_ops_torch = [torch.tensor(op, dtype=torch.cfloat) for op in m_ops_np]
+
+    # TODO: check out how the older algorithm used the strength 
+    gamma = [1.0] * num_collapse # for now
+    beta = [1.0] * num_measure
+
+    # Compute with PyTorch
+    L_torch = liouvillian_superoperator(H_torch, c_ops_torch, m_ops_torch, gamma, beta)
+
+    # Compare
     np.testing.assert_allclose(L_torch.numpy(), L_np, atol=1e-6, rtol=1e-5)
