@@ -43,8 +43,8 @@ def test_random_liouvillian_matches_reference(seed):
     np.random.seed(seed)
 
     dim = 3  # small for speed without loss of generality
-    num_collapse = 2
-    num_measure = 2
+    num_collapse = 3
+    num_measure = 3
 
     # Generate random Hermitian Hamiltonian
     A = np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim)
@@ -54,20 +54,23 @@ def test_random_liouvillian_matches_reference(seed):
     c_ops_np = [np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim) for _ in range(num_collapse)]
     m_ops_np = [np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim) for _ in range(num_measure)]
 
-    # Reference Liouvillian using NumPy
-    L_np = calc_super_liou(H_np, c_ops_np + m_ops_np)
+    # random nonnegative rates
+    gamma = np.random.rand(num_collapse)
+    beta  = np.random.rand(num_measure)
 
-    # Convert to PyTorch tensors
+    ref_ops_np = [np.sqrt(gamma[k]) * c_ops_np[k] for k in range(num_collapse)] + \
+                 [beta[k] * m_ops_np[k] for k in range(num_measure)]
+
+    L_np = calc_super_liou(H_np, ref_ops_np)
+
+
     H_torch = torch.tensor(H_np, dtype=torch.cfloat)
     c_ops_torch = [torch.tensor(op, dtype=torch.cfloat) for op in c_ops_np]
     m_ops_torch = [torch.tensor(op, dtype=torch.cfloat) for op in m_ops_np]
 
-    # TODO: check out how the older algorithm used the strength 
-    gamma = [1.0] * num_collapse # for now
-    beta = [1.0] * num_measure
+    L_torch = liouvillian_superoperator(
+        H_torch, c_ops_torch, m_ops_torch,
+        gamma.tolist(), beta.tolist()
+    ).numpy()
 
-    # Compute with PyTorch
-    L_torch = liouvillian_superoperator(H_torch, c_ops_torch, m_ops_torch, gamma, beta)
-
-    # Compare
-    np.testing.assert_allclose(L_torch.numpy(), L_np, atol=1e-6, rtol=1e-5)
+    np.testing.assert_allclose(L_torch, L_np, atol=1e-6, rtol=1e-5)
