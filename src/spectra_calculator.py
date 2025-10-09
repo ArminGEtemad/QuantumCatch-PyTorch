@@ -1,5 +1,7 @@
 import torch
 
+COMPLEX64_TYPE = torch.cfloat
+
 # Helper function to make omega out of nu
 def freq_to_circfreq(freq):
     return freq * 2 * torch.pi
@@ -13,8 +15,7 @@ def comm_mat(n):
     return k_matrix
 
 def liouvillian_superoperator(hamiltonian, cOps_list, measureOps_list, gamma_list, beta_list):
-    COMPLEX64_TYPE = torch.cfloat
-
+    
     # Using the shape of hamiltonian to calculate the shape of the Liovillian
     shape_hamiltonian = hamiltonian.shape[0]
     shape_liouvillian = shape_hamiltonian * shape_hamiltonian
@@ -66,3 +67,14 @@ def liouvillian_superoperator(hamiltonian, cOps_list, measureOps_list, gamma_lis
     # ------------
 
     return liouvillian
+
+def rho_steady(hamiltonian, liouvillian):
+    # All the eigenvalues of the Liovillain are negative but the steady state must be the closes to zero
+    shape_hamiltonian = hamiltonian.shape[0]
+    evals, evecs = torch.linalg.eig(liouvillian.to(COMPLEX64_TYPE))
+    zero_ind = torch.argmax(torch.real(evals))
+    rho_steady = evecs[:, zero_ind]
+    rho_steady = rho_steady / torch.trace(rho_steady.reshape((shape_hamiltonian, shape_hamiltonian)))
+    rho_steady = torch.reshape(rho_steady, (shape_hamiltonian*shape_hamiltonian, 1))
+
+    return rho_steady
