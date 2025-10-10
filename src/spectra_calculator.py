@@ -97,3 +97,26 @@ def mathcal_a(hamiltonian, measureOps_list):
 
         a_list.append(a_term)
     return a_list 
+
+def mathcal_a_prim(hamiltonian, liouvillian, measureOps_list):
+    # calculate the measurement superoperator
+    mathcalA_list = mathcal_a(hamiltonian, measureOps_list)
+
+    shape_hamiltonian = hamiltonian.shape[0]
+    shape_a_op = mathcalA_list[0].shape[0]
+
+    id_mat = torch.eye(shape_a_op).to(COMPLEX64_TYPE)
+    
+    # calculate the steady state
+    rho0 = rho_steady(hamiltonian, liouvillian)
+    
+    size_measure = len(mathcalA_list)
+    a_prim_list = []
+    for k in range(size_measure):
+        mathcalA_rho0 = mathcalA_list[k] @ rho0
+        trace_mat = torch.trace(mathcalA_rho0.reshape(shape_hamiltonian, shape_hamiltonian)) * id_mat
+        a_prim_term = mathcalA_list[k] - trace_mat
+
+        a_prim_list.append(a_prim_term)
+
+    return a_prim_list
