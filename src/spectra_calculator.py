@@ -78,3 +78,23 @@ def rho_steady(hamiltonian, liouvillian):
     rho_steady = torch.reshape(rho_steady, (shape_hamiltonian*shape_hamiltonian, 1))
 
     return rho_steady
+
+def mathcal_a(hamiltonian, measureOps_list, beta_list):
+    shape_hamiltonian = hamiltonian.shape[0]
+    commutation_matrix = comm_mat(shape_hamiltonian).to(COMPLEX64_TYPE)
+    id_mat = torch.eye(shape_hamiltonian).to(COMPLEX64_TYPE)
+
+    # complex conjugate
+    measureOps_list_star = [torch.conj(measureOps) for measureOps in measureOps_list]
+
+    # number of measurement operators
+    size_measureOps = len(measureOps_list)
+
+    a_list = []
+    for k in range(size_measureOps):
+        term = (1 / 2) * (torch.kron(id_mat, measureOps_list[k]) + torch.kron(measureOps_list_star[k], id_mat))
+        a_term = commutation_matrix @ term @ commutation_matrix
+
+        a_list.append(a_term)
+    return a_list 
+
