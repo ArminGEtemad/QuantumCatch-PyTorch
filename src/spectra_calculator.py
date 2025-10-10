@@ -120,3 +120,13 @@ def mathcal_a_prim(hamiltonian, liouvillian, measureOps_list):
         a_prim_list.append(a_prim_term)
 
     return a_prim_list
+
+def diag_liouvillian(liouvillian):
+    liouvillian = liouvillian.to(COMPLEX64_TYPE)
+    evals, evecs = torch.linalg.eig(liouvillian)
+    evecs_inverse = torch.linalg.inv(evecs)
+    zero_ind = torch.argmax(torch.real(evals))
+    small_indices = torch.abs(evals) < 1e-12
+    diagonal = torch.zeros_like(evals)
+    
+    return evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal
