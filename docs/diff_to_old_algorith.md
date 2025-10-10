@@ -17,3 +17,10 @@ L = i(H\otimes I - I \otimes H) + \sum_k \gamma_k \Big[(d^*_k \otimes d_k) - \fr
 
 Since we now separate the strength from the operator itself, we don't need to replace $\gamma$ with $\sqrt{\gamma}$ like in the old algorithm anymore.
 
+## Measurement superoperators
+The measurements superoperators are now defined consistent with our publications and is calculated via:
+
+```math
+\mathcal{A}_k = \left(\frac{I \otimes c_k + c_k \otimes I}{2}\right)
+```
+
