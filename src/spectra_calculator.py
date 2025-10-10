@@ -79,7 +79,7 @@ def rho_steady(hamiltonian, liouvillian):
 
     return rho_steady
 
-def mathcal_a(hamiltonian, measureOps_list, beta_list):
+def mathcal_a(hamiltonian, measureOps_list):
     shape_hamiltonian = hamiltonian.shape[0]
     commutation_matrix = comm_mat(shape_hamiltonian).to(COMPLEX64_TYPE)
     id_mat = torch.eye(shape_hamiltonian).to(COMPLEX64_TYPE)
@@ -97,4 +97,3 @@ def mathcal_a(hamiltonian, measureOps_list, beta_list):
 
         a_list.append(a_term)
     return a_list 
-
