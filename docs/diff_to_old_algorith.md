@@ -21,6 +21,11 @@ Since we now separate the strength from the operator itself, we don't need to re
 The measurements superoperators are now defined consistent with our publications and is calculated via:
 
 ```math
-\mathcal{A}_k = \left(\frac{I \otimes c_k + c_k \otimes I}{2}\right)
+\mathcal{A}_k = \left(\frac{I \otimes c_k + c^*_k \otimes I}{2}\right)
 ```
 
+## Modified measurement superoperator
+The definition of the modified measurement superoperator is:
+```math
+\mathcal{A}^\prime _k = \left(\frac{I \otimes c_k + c^*_k \otimes I}{2}\right)
+```
