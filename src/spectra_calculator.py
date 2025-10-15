@@ -139,4 +139,23 @@ def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
 
     return Fourier_G
 
+def g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
+    B = nu.numel() # batching size
+
+    denom = -evals.unsqueeze(0) - 1j * nu.unsqueeze(1)
+    denom = denom.to(evals.dtype)
+
+    inv = torch.zeros_like(denom)
+    if (~small_mask).any():
+        inv[:, ~small_mask] = 1.0 / denom[:, ~small_mask]
+
+    inv[:, zero_ind] = 0.0
+
+    evecsb = evecs.unsqueeze(0).expand(B, -1, -1) # batched 
+    evecs_invb = evecs_inv.unsqueeze(0).expand(B, -1, -1) # batched
+
+    tmp = evecsb * inv.unsqueeze(1)
+
+    return torch.bmm(tmp, evecs_invb)
+
 

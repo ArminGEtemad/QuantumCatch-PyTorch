@@ -5,23 +5,32 @@ import os
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu
+from spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu, g_nu_batch
 
 
-# Example Hamiltonian
-H = torch.tensor([[0.0, 1.0], [1.0, 0.0]])
+@pytest.mark.parametrize("device", ["cpu"])
+def test_g_nu_vs_batched(device):
+    # example system
+    H = torch.tensor([[0.0, 1.0], [1.0, 0.0]])
+    c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]])]
+    m_ops = [torch.tensor([[1.0, 0.0], [0.0, -1.0]])]  # Pauli-Z
+    gamma = [1.0]
+    beta = [1.0]
 
-# One collapse operator and one measurement operator (Pauli Z)
-cOps = [torch.tensor([[1.0, 0.0], [0.0, 0.0]])]
-mOps = [torch.tensor([[1.0, 0.0], [0.0, -1.0]])]
-gamma = [1.0]
-beta = [1.0]
+    L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta)
+    evals, V, V_inv, zero_ind, small_mask, diag = diag_liouvillian(L)
 
-L = liouvillian_superoperator(H, cOps, mOps, gamma, beta)
-evals, evecs, evecs_inv, zero_ind, small_mask, diag = diag_liouvillian(L)
+    nu_values = torch.linspace(-1.0, 1.0, 100).to(device)
+    G_batched = g_nu_batch(evals, V, V_inv, zero_ind, small_mask, nu_values)
 
-nu = torch.tensor(1.0)
-G = g_nu(evals, evecs, evecs_inv, zero_ind, small_mask, diag, nu)
+    G_loop = []
+    for nu in nu_values:
+        G = g_nu(evals, V, V_inv, zero_ind, small_mask, diag.clone(), nu)
+        G_loop.append(G)
 
-print("G(nu=1.0):")
-print(G)
+    G_loop = torch.stack(G_loop)
+
+    # test
+    torch.testing.assert_close(
+        G_batched, G_loop, rtol=1e-5, atol=1e-7, msg="Mismatch between g_nu and g_nu_batch!"
+    )
