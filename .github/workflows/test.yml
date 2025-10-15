@@ -2,9 +2,9 @@ name: Run Helper function Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, g_nu_functions ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, g_nu_functions ]
 
 jobs:
   test:
