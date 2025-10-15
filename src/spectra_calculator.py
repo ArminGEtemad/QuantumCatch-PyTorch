@@ -128,5 +128,15 @@ def diag_liouvillian(liouvillian):
     zero_ind = torch.argmax(torch.real(evals))
     small_indices = torch.abs(evals) < 1e-12
     diagonal = torch.zeros_like(evals)
-    
+
     return evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal
+
+def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
+    diagonal[~small_indices] = 1 / (-evals[~small_indices] - 1j * nu)
+    diagonal[zero_ind] = 0
+
+    Fourier_G = evecs @ torch.diag(diagonal) @ evecs_inverse
+
+    return Fourier_G
+
+
