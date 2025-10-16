@@ -26,8 +26,7 @@ def calc_super_A(op):
 """
 For the old code:
 Had to change the Transpose and not multiply with the measurement 
-strength for the test to pass.
-TODO: Double check with supervisor!
+strength for the test to pass. (fixing an error in the old code)
 """
 @pytest.mark.parametrize("seed", range(10))
 def test_mathcal_a_matches(seed):
