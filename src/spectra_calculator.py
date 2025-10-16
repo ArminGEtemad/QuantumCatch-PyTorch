@@ -131,14 +131,6 @@ def diag_liouvillian(liouvillian):
 
     return evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal
 
-def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
-    diagonal[~small_indices] = 1 / (-evals[~small_indices] - 1j * nu)
-    diagonal[zero_ind] = 0
-
-    Fourier_G = evecs @ torch.diag(diagonal) @ evecs_inverse
-
-    return Fourier_G
-
 def g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
     B = nu.numel() # batching size
 
@@ -157,5 +149,24 @@ def g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
     tmp = evecsb * inv.unsqueeze(1)
 
     return torch.bmm(tmp, evecs_invb)
+
+def g_nu_batch_unique(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
+
+    nu_flat = nu.reshape(-1)
+    nu_cpu  = nu_flat.detach().to(torch.float64).cpu().contiguous()
+    uniq_vals, inverse = torch.unique(nu_cpu, return_inverse=True)
+
+    if uniq_vals.numel() == 0:
+        # Degenerate case; should not happen, but keep it safe
+        m = evals.numel()
+        return torch.zeros((0, m, m), dtype=evecs.dtype, device=evecs.device)
+
+    uniq = uniq_vals.to(device=nu.device, dtype=nu.dtype)
+    G_uniq = g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, uniq)
+
+    # Reindex back to original order
+    inverse_dev = inverse.to(G_uniq.device)
+    out = G_uniq.index_select(0, inverse_dev)
+    return out.view(nu_flat.shape[0], *G_uniq.shape[1:])
 
 
