@@ -5,7 +5,7 @@ import os
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import liouvillian_superoperator
+from spectra_calculator import liouvillian_superoperator, diag_liouvillian
 
 
 # Reference Liouvillian from the old version
@@ -39,7 +39,6 @@ def calc_super_liou(h_, c_ops):
 # Test
 @pytest.mark.parametrize("seed", range(10))  # Run the test 10 times with different seeds
 def test_random_liouvillian_matches_reference(seed):
-    torch.manual_seed(seed)
     np.random.seed(seed)
 
     dim = 3  # small for speed without loss of generality
