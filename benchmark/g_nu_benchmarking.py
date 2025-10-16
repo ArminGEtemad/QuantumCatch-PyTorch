@@ -3,7 +3,16 @@ import time
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu, g_nu_batch
+from spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu_batch
+
+
+def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
+    diagonal[~small_indices] = 1 / (-evals[~small_indices] - 1j * nu)
+    diagonal[zero_ind] = 0
+
+    Fourier_G = evecs @ torch.diag(diagonal) @ evecs_inverse
+
+    return Fourier_G
 
 
 def benchmark_nu_sizes(nu_sizes):
