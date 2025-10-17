@@ -1,4 +1,5 @@
 import torch
+import matplotlib.pyplot as plt
 
 COMPLEX64_TYPE = torch.cfloat
 
@@ -113,7 +114,7 @@ def mathcal_a_prim(hamiltonian, liouvillian, measureOps_list):
     size_measure = len(mathcalA_list)
     a_prim_list = []
     for k in range(size_measure):
-        mathcalA_rho0 = mathcalA_list[k] @ rho0
+        mathcalA_rho0 =  mathcalA_list[k] @ rho0
         trace_mat = torch.trace(mathcalA_rho0.reshape(shape_hamiltonian, shape_hamiltonian)) * id_mat
         a_prim_term = mathcalA_list[k] - trace_mat
 
@@ -170,3 +171,60 @@ def g_nu_batch_unique(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
     return out.view(nu_flat.shape[0], *G_uniq.shape[1:])
 
 
+def s2_batched(hamiltonian, liouvillian, measureOps_list, beta_list, freq):
+    omega = freq_to_circfreq(freq)
+    rho_0 = rho_steady(hamiltonian, liouvillian)
+    a_prim = mathcal_a_prim(hamiltonian, liouvillian, measureOps_list)
+    a_prim_0, a_prim_1 = [a for a in a_prim]
+
+    a_prim_0_rho_0 = a_prim_0 @ rho_0
+    a_prim_1_rho_0 = a_prim_1 @ rho_0
+
+    evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
+
+    g_plus = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, omega)
+    g_minus = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, -omega)
+
+    b = omega.numel()
+    shape_hamiltonian = hamiltonian.shape[0]
+
+    a_prim_0_b = a_prim_0.unsqueeze(0).expand(b, -1, -1)
+    a_prim_1_b = a_prim_1.unsqueeze(0).expand(b, -1, -1)
+    a_prim_0_rho_0_b = a_prim_0_rho_0.unsqueeze(0).expand(b, -1, -1)
+    a_prim_1_rho_0_b = a_prim_1_rho_0.unsqueeze(0).expand(b, -1, -1)
+
+    s2_1 = torch.bmm(a_prim_0_b, torch.bmm(g_plus, a_prim_1_rho_0_b)).view(b, shape_hamiltonian, shape_hamiltonian)
+    s2_2 = torch.bmm(a_prim_1_b, torch.bmm(g_minus, a_prim_0_rho_0_b)).view(b, shape_hamiltonian, shape_hamiltonian)
+
+    tr_sum = torch.einsum('bii->b', s2_1) + torch.einsum('bii->b', s2_2)
+    pref = (beta_list[0]*(2**0.5))**2 * (beta_list[1]*(2**0.5))**2
+    return pref * tr_sum
+
+
+def plot_s2(freq, s2):
+    plt.plot(freq, s2)
+    plt.show()
+
+if __name__ == "__main__":
+
+    Hamiltonian = torch.tensor([[1, 0],[0, -1]])*0
+
+    cList = [
+        torch.tensor([[0., 1.],[0., 0.]]),
+        torch.tensor([[0., 0.],[1., 0.]]),
+    ]
+
+    measureList = [
+        torch.tensor([[0, 0],[0, 1]]),
+        torch.tensor([[0, 0],[0, 1]]),
+    ]
+
+    gammaList = torch.tensor([0.3, 0.5])
+    betaList  = torch.tensor([5/(2**.5), 5/(2**.5)])
+
+    resolution = 200
+    f = torch.linspace(0, 2, resolution)
+    L = liouvillian_superoperator(Hamiltonian, cList, measureList, gammaList, betaList)
+    s2 = s2_batched(Hamiltonian, L, measureList, betaList, f)
+    plot_s2(f, s2.real)
+    
