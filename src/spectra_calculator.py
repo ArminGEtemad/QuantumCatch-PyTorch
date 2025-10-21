@@ -1,22 +1,30 @@
 import torch
+from typing import Tuple, Dict, Sequence
+from torch import Tensor
 import matplotlib.pyplot as plt
 
 COMPLEX64_TYPE = torch.cfloat
 
 # Helper function to make omega out of nu
-def freq_to_circfreq(freq):
+def freq_to_circfreq(freq: Tensor) -> Tensor:
     return freq * 2 * torch.pi
 
 # Helper function
 # commutation matrix to bring the liouvillian in the order we need
-def comm_mat(n):
+def comm_mat(n: int) -> Tensor:
     a_fortran = torch.arange(n * n).reshape(n, n).t()
     w = a_fortran.reshape(-1)
     k_matrix = torch.eye(n * n)[w, :]
     return k_matrix
 
 
-def liouvillian_superoperator(hamiltonian, cOps_list, measureOps_dict, gamma_list, beta_dict):
+def liouvillian_superoperator(
+        hamiltonian: Tensor,
+    cOps_list: Sequence[Tensor],
+    measureOps_dict: Dict[str, Tensor],
+    gamma_list: Tensor,
+    beta_dict: Dict[str, float],
+) -> Tensor:
     
     # Using the shape of hamiltonian to calculate the shape of the Liovillian
     shape_hamiltonian = hamiltonian.shape[0]
@@ -72,7 +80,11 @@ def liouvillian_superoperator(hamiltonian, cOps_list, measureOps_dict, gamma_lis
 
     return liouvillian
 
-def rho_steady(hamiltonian, liouvillian):
+def rho_steady(
+        hamiltonian: Tensor, 
+        liouvillian: Tensor
+) -> Tensor:
+
     # All the eigenvalues of the Liovillain are negative but the steady state must be the closes to zero
     shape_hamiltonian = hamiltonian.shape[0]
     evals, evecs = torch.linalg.eig(liouvillian.to(COMPLEX64_TYPE))
@@ -83,7 +95,11 @@ def rho_steady(hamiltonian, liouvillian):
 
     return rho_steady
 
-def mathcal_a(hamiltonian, measureOps_dict):
+def mathcal_a(
+        hamiltonian: Tensor, 
+        measureOps_dict: Dict[str, Tensor]
+) -> Dict[str, Tensor]:
+
     shape_hamiltonian = hamiltonian.shape[0]
     commutation_matrix = comm_mat(shape_hamiltonian).to(COMPLEX64_TYPE)
     id_mat = torch.eye(shape_hamiltonian).to(COMPLEX64_TYPE)
@@ -98,7 +114,12 @@ def mathcal_a(hamiltonian, measureOps_dict):
         
     return a_dict 
 
-def mathcal_a_prim(hamiltonian, liouvillian, measureOps_dict):
+def mathcal_a_prim(
+        hamiltonian: Tensor, 
+        liouvillian: Tensor, 
+        measureOps_dict: Dict[str, Tensor]
+) -> Dict[str, Tensor]:
+    
     # calculate the measurement superoperator
     mathcalA_dict = mathcal_a(hamiltonian, measureOps_dict)
 
@@ -119,7 +140,10 @@ def mathcal_a_prim(hamiltonian, liouvillian, measureOps_dict):
         a_prim_dict[key] = a_prim_term
     return a_prim_dict
 
-def diag_liouvillian(liouvillian):
+def diag_liouvillian(
+        liouvillian: Tensor
+) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    
     liouvillian = liouvillian.to(COMPLEX64_TYPE)
     evals, evecs = torch.linalg.eig(liouvillian)
     evecs_inverse = torch.linalg.inv(evecs)
@@ -129,7 +153,15 @@ def diag_liouvillian(liouvillian):
 
     return evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal
 
-def g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
+def g_nu_batch(
+        evals: Tensor, 
+        evecs: Tensor, 
+        evecs_inv: Tensor, 
+        zero_ind: Tensor, 
+        small_mask: Tensor, 
+        nu: Tensor
+) -> Tensor:
+    
     B = nu.numel() # batching size
 
     denom = -evals.unsqueeze(0) - 1j * nu.unsqueeze(1)
@@ -148,7 +180,14 @@ def g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
 
     return torch.bmm(tmp, evecs_invb)
 
-def g_nu_batch_unique(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
+def g_nu_batch_unique(
+        evals: Tensor,
+        evecs: Tensor,
+        evecs_inv: Tensor, 
+        zero_ind: Tensor, 
+        small_mask: Tensor, 
+        nu: Tensor
+) -> Tensor:
 
     nu_flat = nu.reshape(-1)
     nu_cpu  = nu_flat.detach().to(torch.float64).cpu().contiguous()
@@ -168,7 +207,15 @@ def g_nu_batch_unique(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
     return out.view(nu_flat.shape[0], *G_uniq.shape[1:])
 
 
-def s2_batched(hamiltonian, liouvillian, measure_dict, beta_dict, measureOrder_dict, freq, key='s2'):
+def s2_batched(
+        hamiltonian: Tensor, 
+        liouvillian: Tensor, 
+        measure_dict: Dict[str, Tensor], 
+        beta_dict: Dict[str, float], 
+        measureOrder_dict: Dict[str, list[Tuple[str, str]]], 
+        freq: Tensor, key='s2'
+) -> Dict[Tuple[str, str], Tensor]:
+    
     omega = freq_to_circfreq(freq)
     rho_0 = rho_steady(hamiltonian, liouvillian)
     
@@ -205,7 +252,6 @@ def s2_batched(hamiltonian, liouvillian, measure_dict, beta_dict, measureOrder_d
 
         tr_sum = torch.einsum('bii->b', s2_1) + torch.einsum('bii->b', s2_2)
 
-        # Multiply the corresponding β² factors
         pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2
         result_dict[(op0_key, op1_key)] = pref * tr_sum
 
@@ -227,14 +273,16 @@ if __name__ == "__main__":
     ]
     gammaList = torch.tensor([0.3, 0.5])
 
-    measure_dictionary = {'0': torch.tensor([[0, 0],[0, 1]])}
-    measureOrder_dict = {'s2': [('0','0'), ('1', '0')]}
-    beta_dict  = {'0': 5, '1': 3}
+    measure_dictionary = {'0': torch.tensor([[0., 0.],[0., 1.]])}
+    measureOrder_dict = {'s2': [('0','0')]}
+    beta_dict  = {'0': 5.}
 
     resolution = 300
-    f = torch.linspace(-2, 2, resolution)
+    f = torch.linspace(-2., 2., resolution)
     L = liouvillian_superoperator(Hamiltonian, cList, measure_dictionary, gammaList, beta_dict)
+    evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal = diag_liouvillian(L)
+ 
     s2 = s2_batched(Hamiltonian, L, measure_dictionary, beta_dict, measureOrder_dict, f, key='s2')
     #print(s2)
-    plot_s2(f, s2[('1', '0')].imag)
+    plot_s2(f, s2[('0', '0')].real)
     
