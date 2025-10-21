@@ -43,7 +43,7 @@ def test_g_nu_vs_batched(device):
         G_batched, G_loop, rtol=1e-5, atol=1e-7, msg="Mismatch between g_nu and g_nu_batch!"
     )
 
-@pytest.mark.parametrize("device", ["cpu"])  # add "cuda" later if you want
+@pytest.mark.parametrize("device", ["cpu"])
 def test_g_nu_batch_unique_equivalence(device):
     H = torch.tensor([[0.0, 1.0], [1.0, 0.0]]).to(device)
     c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]]).to(device)]
