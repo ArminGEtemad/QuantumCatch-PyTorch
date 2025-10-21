@@ -34,18 +34,21 @@ def test_mathcal_a_matches(seed):
 
     n = 3
 
-    # Random Hermitian H (just to satisfy function signature)
+    # Random Hermitian Hamiltonian
     A = np.random.randn(n, n) + 1j * np.random.randn(n, n)
     H_np = (A + A.conj().T) / 2
 
-    # Single random measurement operator
+    # Random measurement operator
     op_np = np.random.randn(n, n) + 1j * np.random.randn(n, n)
 
     H_torch = torch.tensor(H_np, dtype=torch.cfloat)
     op_torch = torch.tensor(op_np, dtype=torch.cfloat)
-    A_list_torch = mathcal_a(H_torch, [op_torch])
-    A_torch = A_list_torch[0].cpu().numpy()
 
+    # 🛠 Use a dict to match the new function signature
+    A_dict_torch = mathcal_a(H_torch, {'0': op_torch})
+    A_torch = A_dict_torch['0'].cpu().numpy()
+
+    # Reference calculation
     A_base = calc_super_A(op_np)
 
     # Assertion

@@ -37,23 +37,20 @@ def calc_super_liou(h_, c_ops):
     return op_super
 
 # Test
-@pytest.mark.parametrize("seed", range(10))  # Run the test 10 times with different seeds
+@pytest.mark.parametrize("seed", range(10))
 def test_random_liouvillian_matches_reference(seed):
     np.random.seed(seed)
 
-    dim = 3  # small for speed without loss of generality
+    dim = 3
     num_collapse = 3
     num_measure = 3
 
-    # Generate random Hermitian Hamiltonian
     A = np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim)
     H_np = (A + A.conj().T) / 2
 
-    # Random collapse and measurement operators (non-Hermitian allowed)
     c_ops_np = [np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim) for _ in range(num_collapse)]
     m_ops_np = [np.random.randn(dim, dim) + 1j * np.random.randn(dim, dim) for _ in range(num_measure)]
 
-    # random nonnegative rates
     gamma = np.random.rand(num_collapse)
     beta  = np.random.rand(num_measure)
 
@@ -62,14 +59,17 @@ def test_random_liouvillian_matches_reference(seed):
 
     L_np = calc_super_liou(H_np, ref_ops_np)
 
-
     H_torch = torch.tensor(H_np, dtype=torch.cfloat)
     c_ops_torch = [torch.tensor(op, dtype=torch.cfloat) for op in c_ops_np]
     m_ops_torch = [torch.tensor(op, dtype=torch.cfloat) for op in m_ops_np]
 
+    # ✅ Convert to dicts
+    m_ops_dict = {str(k): m_ops_torch[k] for k in range(num_measure)}
+    beta_dict  = {str(k): beta[k] for k in range(num_measure)}
+
     L_torch = liouvillian_superoperator(
-        H_torch, c_ops_torch, m_ops_torch,
-        gamma.tolist(), beta.tolist()
+        H_torch, c_ops_torch, m_ops_dict,
+        gamma.tolist(), beta_dict
     ).numpy()
 
     np.testing.assert_allclose(L_torch, L_np, atol=1e-6, rtol=1e-5)
