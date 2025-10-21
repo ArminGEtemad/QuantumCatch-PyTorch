@@ -21,9 +21,9 @@ def test_g_nu_vs_batched(device):
     # example system
     H = torch.tensor([[0.0, 1.0], [1.0, 0.0]])
     c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]])]
-    m_ops = [torch.tensor([[1.0, 0.0], [0.0, -1.0]])]  # Pauli-Z
+    m_ops = {'0': torch.tensor([[1.0, 0.0], [0.0, -1.0]])}  # Pauli-Z
     gamma = [1.0]
-    beta = [1.0]
+    beta = {'0': 1.0}
 
     L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta)
     evals, V, V_inv, zero_ind, small_mask, diag = diag_liouvillian(L)
@@ -43,13 +43,13 @@ def test_g_nu_vs_batched(device):
         G_batched, G_loop, rtol=1e-5, atol=1e-7, msg="Mismatch between g_nu and g_nu_batch!"
     )
 
-@pytest.mark.parametrize("device", ["cpu"])  # add "cuda" later if you want
+@pytest.mark.parametrize("device", ["cpu"])
 def test_g_nu_batch_unique_equivalence(device):
     H = torch.tensor([[0.0, 1.0], [1.0, 0.0]]).to(device)
     c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]]).to(device)]
-    m_ops = [torch.tensor([[1.0, 0.0], [0.0, -1.0]]).to(device)]
+    m_ops = {'0': torch.tensor([[1.0, 0.0], [0.0, -1.0]]).to(device)}
     gamma = [1.0]
-    beta = [1.0]
+    beta = {'0': 1.0}
 
     L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta)
     evals, V, V_inv, zero_ind, small_mask, diag = diag_liouvillian(L)

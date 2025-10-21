@@ -15,11 +15,14 @@ def comm_mat(n):
     k_matrix = torch.eye(n * n)[w, :]
     return k_matrix
 
-def liouvillian_superoperator(hamiltonian, cOps_list, measureOps_list, gamma_list, beta_list):
+
+def liouvillian_superoperator(hamiltonian, cOps_list, measureOps_dict, gamma_list, beta_dict):
     
     # Using the shape of hamiltonian to calculate the shape of the Liovillian
     shape_hamiltonian = hamiltonian.shape[0]
     shape_liouvillian = shape_hamiltonian * shape_hamiltonian
+    measureOps_list = list(measureOps_dict.values())
+    beta_list = list(beta_dict.values())
 
     # need commutation matrix to bring the order of the matrixized Liouvillian elements
     # to our conventional way
@@ -80,47 +83,41 @@ def rho_steady(hamiltonian, liouvillian):
 
     return rho_steady
 
-def mathcal_a(hamiltonian, measureOps_list):
+def mathcal_a(hamiltonian, measureOps_dict):
     shape_hamiltonian = hamiltonian.shape[0]
     commutation_matrix = comm_mat(shape_hamiltonian).to(COMPLEX64_TYPE)
     id_mat = torch.eye(shape_hamiltonian).to(COMPLEX64_TYPE)
 
-    # complex conjugate
-    measureOps_list_star = [torch.conj(measureOps) for measureOps in measureOps_list]
-
-    # number of measurement operators
-    size_measureOps = len(measureOps_list)
-
-    a_list = []
-    for k in range(size_measureOps):
-        term = (1 / 2) * (torch.kron(id_mat, measureOps_list[k]) + torch.kron(measureOps_list_star[k], id_mat))
+    a_dict = {}
+    for key, measureOp in measureOps_dict.items():
+        measureOp_star = torch.conj(measureOp)
+        term = (1 / 2) * (torch.kron(id_mat, measureOp) + torch.kron(measureOp_star, id_mat))
         a_term = commutation_matrix @ term @ commutation_matrix
 
-        a_list.append(a_term)
-    return a_list 
+        a_dict[key] = a_term
+        
+    return a_dict 
 
-def mathcal_a_prim(hamiltonian, liouvillian, measureOps_list):
+def mathcal_a_prim(hamiltonian, liouvillian, measureOps_dict):
     # calculate the measurement superoperator
-    mathcalA_list = mathcal_a(hamiltonian, measureOps_list)
+    mathcalA_dict = mathcal_a(hamiltonian, measureOps_dict)
 
     shape_hamiltonian = hamiltonian.shape[0]
-    shape_a_op = mathcalA_list[0].shape[0]
+    shape_a_op = next(iter(mathcalA_dict.values())).shape[0]
 
     id_mat = torch.eye(shape_a_op).to(COMPLEX64_TYPE)
     
     # calculate the steady state
     rho0 = rho_steady(hamiltonian, liouvillian)
     
-    size_measure = len(mathcalA_list)
-    a_prim_list = []
-    for k in range(size_measure):
-        mathcalA_rho0 =  mathcalA_list[k] @ rho0
+    a_prim_dict = {}
+    for key, mathcalA in mathcalA_dict.items():
+        mathcalA_rho0 =  mathcalA @ rho0
         trace_mat = torch.trace(mathcalA_rho0.reshape(shape_hamiltonian, shape_hamiltonian)) * id_mat
-        a_prim_term = mathcalA_list[k] - trace_mat
+        a_prim_term = mathcalA - trace_mat
 
-        a_prim_list.append(a_prim_term)
-
-    return a_prim_list
+        a_prim_dict[key] = a_prim_term
+    return a_prim_dict
 
 def diag_liouvillian(liouvillian):
     liouvillian = liouvillian.to(COMPLEX64_TYPE)
@@ -171,34 +168,49 @@ def g_nu_batch_unique(evals, evecs, evecs_inv, zero_ind, small_mask, nu):
     return out.view(nu_flat.shape[0], *G_uniq.shape[1:])
 
 
-def s2_batched(hamiltonian, liouvillian, measureOps_list, beta_list, freq):
+def s2_batched(hamiltonian, liouvillian, measure_dict, beta_dict, measureOrder_dict, freq, key='s2'):
     omega = freq_to_circfreq(freq)
     rho_0 = rho_steady(hamiltonian, liouvillian)
-    a_prim = mathcal_a_prim(hamiltonian, liouvillian, measureOps_list)
-    a_prim_0, a_prim_1 = [a for a in a_prim]
+    
+    # Get only the operators we’ll actually use
+    used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
+    used_measure_dict = {k: measure_dict[k] for k in used_keys}
+    
+    # Compute all a' terms just once
+    a_prim_dict = mathcal_a_prim(hamiltonian, liouvillian, used_measure_dict)
 
-    a_prim_0_rho_0 = a_prim_0 @ rho_0
-    a_prim_1_rho_0 = a_prim_1 @ rho_0
-
+    # Diagonalize Liouvillian
     evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
-
-    g_plus = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, omega)
+    g_plus  = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices,  omega)
     g_minus = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, -omega)
 
-    b = omega.numel()
     shape_hamiltonian = hamiltonian.shape[0]
+    b = omega.numel()
 
-    a_prim_0_b = a_prim_0.unsqueeze(0).expand(b, -1, -1)
-    a_prim_1_b = a_prim_1.unsqueeze(0).expand(b, -1, -1)
-    a_prim_0_rho_0_b = a_prim_0_rho_0.unsqueeze(0).expand(b, -1, -1)
-    a_prim_1_rho_0_b = a_prim_1_rho_0.unsqueeze(0).expand(b, -1, -1)
+    result_dict = {}
+    for op0_key, op1_key in measureOrder_dict[key]:
+        a0 = a_prim_dict[op0_key]
+        a1 = a_prim_dict[op1_key]
 
-    s2_1 = torch.bmm(a_prim_0_b, torch.bmm(g_plus, a_prim_1_rho_0_b)).view(b, shape_hamiltonian, shape_hamiltonian)
-    s2_2 = torch.bmm(a_prim_1_b, torch.bmm(g_minus, a_prim_0_rho_0_b)).view(b, shape_hamiltonian, shape_hamiltonian)
+        a0_rho = a0 @ rho_0
+        a1_rho = a1 @ rho_0
 
-    tr_sum = torch.einsum('bii->b', s2_1) + torch.einsum('bii->b', s2_2)
-    pref = (beta_list[0]*(2**0.5))**2 * (beta_list[1]*(2**0.5))**2
-    return pref * tr_sum
+        a0_b = a0.unsqueeze(0).expand(b, -1, -1)
+        a1_b = a1.unsqueeze(0).expand(b, -1, -1)
+        a0_rho_b = a0_rho.unsqueeze(0).expand(b, -1, -1)
+        a1_rho_b = a1_rho.unsqueeze(0).expand(b, -1, -1)
+
+        s2_1 = torch.bmm(a0_b, torch.bmm(g_plus, a1_rho_b)).view(b, shape_hamiltonian, shape_hamiltonian)
+        s2_2 = torch.bmm(a1_b, torch.bmm(g_minus, a0_rho_b)).view(b, shape_hamiltonian, shape_hamiltonian)
+
+        tr_sum = torch.einsum('bii->b', s2_1) + torch.einsum('bii->b', s2_2)
+
+        # Multiply the corresponding β² factors
+        pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2
+        result_dict[(op0_key, op1_key)] = pref * tr_sum
+
+    return result_dict
+
 
 
 def plot_s2(freq, s2):
@@ -213,18 +225,16 @@ if __name__ == "__main__":
         torch.tensor([[0., 1.],[0., 0.]]),
         torch.tensor([[0., 0.],[1., 0.]]),
     ]
-
-    measureList = [
-        torch.tensor([[0, 0],[0, 1]]),
-        torch.tensor([[0, 0],[0, 1]]),
-    ]
-
     gammaList = torch.tensor([0.3, 0.5])
-    betaList  = torch.tensor([5/(2**.5), 5/(2**.5)])
 
-    resolution = 200
-    f = torch.linspace(0, 2, resolution)
-    L = liouvillian_superoperator(Hamiltonian, cList, measureList, gammaList, betaList)
-    s2 = s2_batched(Hamiltonian, L, measureList, betaList, f)
-    plot_s2(f, s2.real)
+    measure_dictionary = {'0': torch.tensor([[0, 0],[0, 1]])}
+    measureOrder_dict = {'s2': [('0','0'), ('1', '0')]}
+    beta_dict  = {'0': 5, '1': 3}
+
+    resolution = 300
+    f = torch.linspace(-2, 2, resolution)
+    L = liouvillian_superoperator(Hamiltonian, cList, measure_dictionary, gammaList, beta_dict)
+    s2 = s2_batched(Hamiltonian, L, measure_dictionary, beta_dict, measureOrder_dict, f, key='s2')
+    #print(s2)
+    plot_s2(f, s2[('1', '0')].imag)
     
