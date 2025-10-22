@@ -1,11 +1,7 @@
 import numpy as np
 import torch
-import sys
-import os
 import pytest
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import mathcal_a 
+from multichqc.spectra_calculator import mathcal_a 
 
 
 def calc_super_A(op):

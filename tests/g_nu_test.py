@@ -1,11 +1,9 @@
 import torch
 import numpy as np
-import sys
-import os
+
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu_batch, g_nu_batch_unique
+from multichqc.spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu_batch, g_nu_batch_unique
 
 def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
     diagonal[~small_indices] = 1 / (-evals[~small_indices] - 1j * nu)

@@ -1,11 +1,8 @@
 import torch
 import numpy as np
-import sys
-import os
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import liouvillian_superoperator, diag_liouvillian
+from multichqc.spectra_calculator import liouvillian_superoperator
 
 
 # Reference Liouvillian from the old version
