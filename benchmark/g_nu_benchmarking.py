@@ -1,9 +1,6 @@
 import torch
 import time
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu_batch
+from multichqc.spectra_calculator import liouvillian_superoperator, diag_liouvillian, g_nu_batch
 
 
 def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
@@ -18,10 +15,10 @@ def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
 def benchmark_nu_sizes(nu_sizes):
     # Set up test system (2x2 Hamiltonian)
     H = torch.tensor([[0.0, 1.0], [1.0, 0.0]])
-    c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]])]
-    m_ops = [torch.tensor([[1.0, 0.0], [0.0, -1.0]])]
-    gamma = [1.0]
-    beta = [1.0]
+    c_ops = [torch.tensor([[0., 1.], [0., 0.]])]
+    m_ops = {'0': torch.tensor([[0., 0.], [0., 1.]])}
+    gamma = torch.tensor([1])
+    beta = {'0': 1}
 
     # Generate Liouvillian and diagonalization
     L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta)
