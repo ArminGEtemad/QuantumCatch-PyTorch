@@ -258,48 +258,38 @@ def s2_batched(
 
     return result_dict
 
-@dataclass
 class SpectrumCalculator:
-    spe_config: SpectrumConfig
-    sys_config: SystemConfig
+    def __init__(self, spe_config: SpectrumConfig, sys_config: SystemConfig):
+        self.spe_config = spe_config
+        self.sys_config = sys_config
 
-    liouvillian: Tensor = field(init=False)
-    d_liouvillian: Tuple[Tensor, Tensor, Tensor, 
-                         Tensor, Tensor, Tensor] = field(init=False)
-    rho_0: Tensor = field(init=False)
-    omega: Tensor = field(init=False)
-    freq: Tensor = field(init=False)
-    requested_order_list: list[str] = field(init=False)
-    s2: Optional[Dict[Tuple[str, str], Tensor]] = field(init=False, default=None)
+        self.liouvillian = self._compute_liouvillian()
+        self.freq = torch.linspace(spe_config.f_min, spe_config.f_max, spe_config.resolution)
+        self.omega = freq_to_circfreq(self.freq)
+        self.rho_0 = rho_steady(sys_config.hamiltonian, self.liouvillian)
+        self.requested_order_list = list(spe_config.order_combi.keys())
+        self.s2 = None
 
-    def __post_init__(self):
+        if 's2' in self.requested_order_list:
+            self.s2 = self._compute_s2()
 
-        self.liouvillian = liouvillian_superoperator(
-            self.sys_config.hamiltonian, 
-            self.sys_config.collapse_ops, 
-            self.sys_config.measurement_ops, 
-            self.sys_config.collapse_strength, 
+    def _compute_liouvillian(self):
+        return liouvillian_superoperator(
+            self.sys_config.hamiltonian,
+            self.sys_config.collapse_ops,
+            self.sys_config.measurement_ops,
+            self.sys_config.collapse_strength,
             self.sys_config.measurement_strength
         )
 
-        self.freq = torch.linspace(
-            self.spe_config.f_min, 
-            self.spe_config.f_max, 
-            self.spe_config.resolution
+    def _compute_s2(self):
+        return s2_batched(
+            self.sys_config.hamiltonian,
+            self.liouvillian,
+            self.sys_config.measurement_ops,
+            self.sys_config.measurement_strength,
+            self.spe_config.order_combi,
+            self.rho_0,
+            self.omega,
+            key='s2'
         )
-
-        self.omega = freq_to_circfreq(self.freq)
-        self.rho_0 = rho_steady(self.sys_config.hamiltonian, self.liouvillian)
-        self.requested_order_list = list(self.spe_config.order_combi.keys())
-
-        if 's2' in self.requested_order_list:
-            self.s2 = s2_batched(
-                self.sys_config.hamiltonian,
-                self.liouvillian,
-                self.sys_config.measurement_ops,
-                self.sys_config.measurement_strength,
-                self.spe_config.order_combi,
-                self.rho_0,
-                self.omega,
-                key='s2'
-            )
