@@ -1,11 +1,9 @@
-# run_test_s2.py
 import torch
-import matplotlib.pyplot as plt
-
 from multichqc.system_config import SystemConfig
 from multichqc.input_config import SpectrumConfig
 from multichqc.spectra_calculator import SpectrumCalculator
-
+from multichqc.plot_config import PlotConfig
+from multichqc.spectra_plotter import SpectrumPlotter
 
 #----- EXAMPLE SYSTEM ------
 H = torch.tensor([[1., 0.], [0., -1.]]) * 0
@@ -16,23 +14,18 @@ c_ops = [
 ]
 gamma_list = torch.tensor([0.3, 0.5])
 
-measure_ops = {'0': torch.tensor([[0., 0.], [0., 1.]])}
-beta_dict = {'0': 5.0}
-measure_order = {'s2': [('0', '0')], 's3': [('1', '0')]}
+measure_ops = {
+    '0': torch.tensor([[0., 0.], [0., 1.]]),
+    '1': torch.tensor([[1., 0.], [0., 0.]])
+}
+beta_dict = {'0': 5., '1': 3.}
 
-#----- SPEC CONFIG -----
+measure_order = {'s2': [('0', '0'), ('1', '1'), ('1', '0')]}
+
+#----- SPECTRUM CONFIG -----
 resolution = 300
 f_min = -2.0
 f_max = 2.0
-
-#----- CONFIGS -----
-sys_config = SystemConfig(
-    hamiltonian=H,
-    collapse_ops=c_ops,
-    measurement_ops=measure_ops,
-    collapse_strength=gamma_list,
-    measurement_strength=beta_dict
-)
 
 spe_config = SpectrumConfig(
     resolution=resolution,
@@ -41,17 +34,24 @@ spe_config = SpectrumConfig(
     order_combi=measure_order
 )
 
-#--- CALCULATION ---
+sys_config = SystemConfig(
+    hamiltonian=H,
+    collapse_ops=c_ops,
+    measurement_ops=measure_ops,
+    collapse_strength=gamma_list,
+    measurement_strength=beta_dict
+)
+
+#----- SPECTRUM CALCULATION -----
 calc = SpectrumCalculator(spe_config, sys_config)
 
-if calc.s2 is not None:
-    for (op0, op1), spectrum in calc.s2.items():
-        plt.plot(calc.freq.numpy(), spectrum.real.numpy(), label=f"S2({op0}, {op1})")
-    plt.xlabel("Frequency")
-    plt.ylabel("S2")
-    plt.title("S2")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-else:
-    print("S₂ was not computed.")
+#----- PLOT CONFIG & PLOTTING -----
+plot_config = PlotConfig(
+    f_min=-2.0,
+    f_max=2.0,
+    display_orders=[2],
+    plot_format=["re", "im"],
+)
+
+plotter = SpectrumPlotter(calc, plot_config)
+plotter.display()
