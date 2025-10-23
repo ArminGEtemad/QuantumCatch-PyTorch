@@ -9,8 +9,9 @@ from multichqc.system_config import SystemConfig
 COMPLEX64_TYPE = torch.cfloat
 
 # Helper function to make omega out of nu
-def freq_to_circfreq(freq: Tensor) -> Tensor:
-    return freq * 2 * torch.pi
+def freq_to_circfreq(freq: Tensor, backend:str) -> Tensor:
+    omega = freq * 2 * torch.pi 
+    return omega.to(backend)
 
 # Helper function
 # commutation matrix to bring the liouvillian in the order we need
@@ -27,6 +28,7 @@ def liouvillian_superoperator(
     measureOps_dict: Dict[str, Tensor],
     gamma_list: Tensor,
     beta_dict: Dict[str, float],
+    backend: str,
 ) -> Tensor:
     
     # Using the shape of hamiltonian to calculate the shape of the Liovillian
@@ -81,11 +83,12 @@ def liouvillian_superoperator(
     liouvillian = l1 + l2 + l3
     # ------------
 
-    return liouvillian
+    return liouvillian.to(backend)
 
 def rho_steady(
         hamiltonian: Tensor, 
-        liouvillian: Tensor
+        liouvillian: Tensor,
+        backend: str,
 ) -> Tensor:
 
     # All the eigenvalues of the Liovillain are negative but the steady state must be the closes to zero
@@ -96,11 +99,12 @@ def rho_steady(
     rho_steady = rho_steady / torch.trace(rho_steady.reshape((shape_hamiltonian, shape_hamiltonian)))
     rho_steady = torch.reshape(rho_steady, (shape_hamiltonian*shape_hamiltonian, 1))
 
-    return rho_steady
+    return rho_steady.to(backend)
 
 def mathcal_a(
         hamiltonian: Tensor, 
-        measureOps_dict: Dict[str, Tensor]
+        measureOps_dict: Dict[str, Tensor],
+        backend:str,
 ) -> Dict[str, Tensor]:
 
     shape_hamiltonian = hamiltonian.shape[0]
@@ -113,26 +117,24 @@ def mathcal_a(
         term = (1 / 2) * (torch.kron(id_mat, measureOp) + torch.kron(measureOp_star, id_mat))
         a_term = commutation_matrix @ term @ commutation_matrix
 
-        a_dict[key] = a_term
+        a_dict[key] = a_term.to(backend)
         
-    return a_dict 
+    return a_dict
 
 def mathcal_a_prim(
         hamiltonian: Tensor, 
-        liouvillian: Tensor, 
-        measureOps_dict: Dict[str, Tensor]
+        rho0: Tensor,
+        measureOps_dict: Dict[str, Tensor],
+        backend: str,
 ) -> Dict[str, Tensor]:
     
     # calculate the measurement superoperator
-    mathcalA_dict = mathcal_a(hamiltonian, measureOps_dict)
+    mathcalA_dict = mathcal_a(hamiltonian, measureOps_dict, backend)
 
     shape_hamiltonian = hamiltonian.shape[0]
     shape_a_op = next(iter(mathcalA_dict.values())).shape[0]
 
-    id_mat = torch.eye(shape_a_op).to(COMPLEX64_TYPE)
-    
-    # calculate the steady state
-    rho0 = rho_steady(hamiltonian, liouvillian)
+    id_mat = torch.eye(shape_a_op).to(COMPLEX64_TYPE).to(backend)
     
     a_prim_dict = {}
     for key, mathcalA in mathcalA_dict.items():
@@ -145,7 +147,7 @@ def mathcal_a_prim(
 
 def diag_liouvillian(
         liouvillian: Tensor
-) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]: # lives wherever Liouvillian lives
     
     liouvillian = liouvillian.to(COMPLEX64_TYPE)
     evals, evecs = torch.linalg.eig(liouvillian)
@@ -162,12 +164,12 @@ def g_nu_batch(
         evecs_inv: Tensor, 
         zero_ind: Tensor, 
         small_mask: Tensor, 
-        nu: Tensor
-) -> Tensor:
+        omega: Tensor
+) -> Tensor: # this lives wherever Liouvillian lives
     
-    B = nu.numel() # batching size
+    B = omega.numel() # batching size
 
-    denom = -evals.unsqueeze(0) - 1j * nu.unsqueeze(1)
+    denom = -evals.unsqueeze(0) - 1j * omega.unsqueeze(1)
     denom = denom.to(evals.dtype)
 
     inv = torch.zeros_like(denom)
@@ -189,10 +191,10 @@ def g_nu_batch_unique(
         evecs_inv: Tensor, 
         zero_ind: Tensor, 
         small_mask: Tensor, 
-        nu: Tensor
+        omega: Tensor
 ) -> Tensor:
 
-    nu_flat = nu.reshape(-1)
+    nu_flat = omega.reshape(-1)
     nu_cpu  = nu_flat.detach().to(torch.float64).cpu().contiguous()
     uniq_vals, inverse = torch.unique(nu_cpu, return_inverse=True)
 
@@ -201,7 +203,7 @@ def g_nu_batch_unique(
         m = evals.numel()
         return torch.zeros((0, m, m), dtype=evecs.dtype, device=evecs.device)
 
-    uniq = uniq_vals.to(device=nu.device, dtype=nu.dtype)
+    uniq = uniq_vals.to(device=omega.device, dtype=omega.dtype)
     G_uniq = g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, uniq)
 
     # Reindex back to original order
@@ -217,6 +219,7 @@ def s2_batched(
         measureOrder_dict: Dict[str, list[Tuple[str, str]]], 
         rho_0: Tensor,
         omega: Tensor,
+        backend: str,
         key='s2',
 ) -> Dict[Tuple[str, str], Tensor]:
             
@@ -225,7 +228,7 @@ def s2_batched(
     used_measure_dict = {k: measure_dict[k] for k in used_keys}
     
     # Compute all a' terms just once
-    a_prim_dict = mathcal_a_prim(hamiltonian, liouvillian, used_measure_dict)
+    a_prim_dict = mathcal_a_prim(hamiltonian, rho_0, used_measure_dict, backend)
 
     # Diagonalize Liouvillian
     evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
@@ -254,7 +257,7 @@ def s2_batched(
         tr_sum = torch.einsum('bii->b', s2_1) + torch.einsum('bii->b', s2_2)
 
         pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2
-        result_dict[(op0_key, op1_key)] = pref * tr_sum
+        result_dict[(op0_key, op1_key)] = (pref * tr_sum).cpu().numpy() # save the result back in CPU
 
     return result_dict
 
@@ -262,11 +265,12 @@ class SpectrumCalculator:
     def __init__(self, spe_config: SpectrumConfig, sys_config: SystemConfig):
         self.spe_config = spe_config
         self.sys_config = sys_config
+        self.backend = self.spe_config.backend
 
         self.liouvillian = self._compute_liouvillian()
         self.freq = torch.linspace(spe_config.f_min, spe_config.f_max, spe_config.resolution)
-        self.omega = freq_to_circfreq(self.freq)
-        self.rho_0 = rho_steady(sys_config.hamiltonian, self.liouvillian)
+        self.omega = freq_to_circfreq(self.freq, self.backend)
+        self.rho_0 = rho_steady(sys_config.hamiltonian, self.liouvillian, self.backend)
         self.requested_order_list = list(spe_config.order_combi.keys())
         self.s2 = None
 
@@ -279,7 +283,8 @@ class SpectrumCalculator:
             self.sys_config.collapse_ops,
             self.sys_config.measurement_ops,
             self.sys_config.collapse_strength,
-            self.sys_config.measurement_strength
+            self.sys_config.measurement_strength,
+            self.backend
         )
 
     def _compute_s2(self):
@@ -291,5 +296,6 @@ class SpectrumCalculator:
             self.spe_config.order_combi,
             self.rho_0,
             self.omega,
+            self.backend,
             key='s2'
         )

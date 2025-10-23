@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Literal
 
 @dataclass
 class SpectrumConfig:
@@ -7,6 +7,7 @@ class SpectrumConfig:
     f_min: float
     f_max: float
     order_combi: Dict[str, list[Tuple[str, str]]]
+    backend: Literal['cpu', 'cuda']
 
     def __post_init__(self):
         if self.f_min >= self.f_max:

@@ -54,7 +54,7 @@ class SpectrumPlotter:
                     else:
                         raise ValueError(f"Unknown plot_format: {fmt}")
 
-                    ax.plot(freq.numpy(), y.numpy())
+                    ax.plot(freq.cpu().numpy(), y)
 
             plt.tight_layout(rect=[0, 0, 1, 0.96])
             plt.show()
