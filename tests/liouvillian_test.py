@@ -35,7 +35,11 @@ def calc_super_liou(h_, c_ops):
 
 # Test
 @pytest.mark.parametrize("seed", range(10))
-def test_random_liouvillian_matches_reference(seed):
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_random_liouvillian_matches_reference(seed, device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA NOT AVAILABLE.")
+    
     np.random.seed(seed)
 
     dim = 3
@@ -66,7 +70,7 @@ def test_random_liouvillian_matches_reference(seed):
 
     L_torch = liouvillian_superoperator(
         H_torch, c_ops_torch, m_ops_dict,
-        gamma.tolist(), beta_dict
-    ).numpy()
+        gamma.tolist(), beta_dict, device
+    ).cpu().numpy()
 
     np.testing.assert_allclose(L_torch, L_np, atol=1e-6, rtol=1e-5)

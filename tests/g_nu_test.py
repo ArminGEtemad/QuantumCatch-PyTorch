@@ -14,8 +14,11 @@ def g_nu(evals, evecs, evecs_inverse, zero_ind, small_indices, diagonal, nu):
     return Fourier_G
 
 
-@pytest.mark.parametrize("device", ["cpu"])
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
 def test_g_nu_vs_batched(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA NOT AVAILABLE.")
+
     # example system
     H = torch.tensor([[0.0, 1.0], [1.0, 0.0]])
     c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]])]
@@ -23,7 +26,7 @@ def test_g_nu_vs_batched(device):
     gamma = [1.0]
     beta = {'0': 1.0}
 
-    L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta)
+    L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta, device)
     evals, V, V_inv, zero_ind, small_mask, diag = diag_liouvillian(L)
 
     nu_values = torch.linspace(-1.0, 1.0, 100).to(device)
@@ -43,13 +46,16 @@ def test_g_nu_vs_batched(device):
 
 @pytest.mark.parametrize("device", ["cpu"])
 def test_g_nu_batch_unique_equivalence(device):
-    H = torch.tensor([[0.0, 1.0], [1.0, 0.0]]).to(device)
-    c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]]).to(device)]
-    m_ops = {'0': torch.tensor([[1.0, 0.0], [0.0, -1.0]]).to(device)}
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA NOT AVAILABLE.")
+    
+    H = torch.tensor([[0.0, 1.0], [1.0, 0.0]])
+    c_ops = [torch.tensor([[1.0, 0.0], [0.0, 0.0]])]
+    m_ops = {'0': torch.tensor([[1.0, 0.0], [0.0, -1.0]])}
     gamma = [1.0]
     beta = {'0': 1.0}
 
-    L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta)
+    L = liouvillian_superoperator(H, c_ops, m_ops, gamma, beta, device)
     evals, V, V_inv, zero_ind, small_mask, diag = diag_liouvillian(L)
 
     nu_values = torch.linspace(-5.0, 5.0, 500, device=device)

@@ -25,7 +25,11 @@ Had to change the Transpose and not multiply with the measurement
 strength for the test to pass. (fixing an error in the old code)
 """
 @pytest.mark.parametrize("seed", range(10))
-def test_mathcal_a_matches(seed):
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_mathcal_a_matches(seed, device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA NOT AVAILABLE.")
+    
     np.random.seed(seed)
 
     n = 3
@@ -41,7 +45,7 @@ def test_mathcal_a_matches(seed):
     op_torch = torch.tensor(op_np, dtype=torch.cfloat)
 
     # 🛠 Use a dict to match the new function signature
-    A_dict_torch = mathcal_a(H_torch, {'0': op_torch})
+    A_dict_torch = mathcal_a(H_torch, {'0': op_torch}, device)
     A_torch = A_dict_torch['0'].cpu().numpy()
 
     # Reference calculation
