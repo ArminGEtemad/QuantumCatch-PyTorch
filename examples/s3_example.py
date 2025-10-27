@@ -20,11 +20,11 @@ measure_ops = {
 }
 beta_dict = {'0': 5., '1': 3.}
 
-measure_order = {'s2': [('0','0')], 's3': [('0', '0', '0'), ('0', '0', '1')]}
+measure_order = {'s3': [('1', '0', '0')]}
 
 #----- SPECTRUM CONFIG -----
-resolution = 100
-f_min = -2.0
+resolution = 500
+f_min = 0
 f_max = 2.0
 
 spe_config = SpectrumConfig(
@@ -32,7 +32,6 @@ spe_config = SpectrumConfig(
     f_min=f_min,
     f_max=f_max,
     order_combi=measure_order,
-    s3_block_size=None,
     backend='cpu'
 )
 
@@ -46,12 +45,20 @@ sys_config = SystemConfig(
 
 #----- SPECTRUM CALCULATION -----
 calc = SpectrumCalculator(spe_config, sys_config)
-plot_config = PlotConfig(
-    f_min=-2.0,
-    f_max=2.0,
-    display_orders=[3],
-    plot_format=["re", "im"],
-)
+import matplotlib.pyplot as plt
 
-plotter = SpectrumPlotter(calc, plot_config)
-plotter.display()
+s3 = calc.s3[('1', '0', '0')]
+
+f_min = spe_config.f_min
+f_max = spe_config.f_max
+extent = (f_min, f_max, f_min, f_max)
+
+plt.figure(figsize=(6, 5))
+plt.imshow(s3.real, extent=extent, origin='lower', cmap='seismic', aspect='auto')
+plt.colorbar(label='S3 Amplitude')
+plt.title("S3 Spectrum for ('1','0','0')")
+plt.xlabel('Frequency $f_1$')
+plt.ylabel('Frequency $f_2$')
+plt.tight_layout()
+plt.show()
+
