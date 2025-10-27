@@ -76,7 +76,6 @@ class SpectrumPlotter:
                     label_base = f"({', '.join(ops)})"
                     data_real = torch.tensor(data.real)
                     data_imag = torch.tensor(data.imag)
-                    data_abs = torch.abs(data_real + 1j * data_imag)
 
                     for col_idx, fmt in enumerate(self.plot_config.plot_format):
                         ax = axes[row_idx][col_idx]
@@ -91,11 +90,7 @@ class SpectrumPlotter:
                             vmax = torch.max(torch.abs(y)).item()
                             vmin = -vmax
                             title = f"Im {label_base}"
-                        elif fmt == "abs":
-                            y = data_abs
-                            vmax = torch.max(y).item()
-                            vmin = 0
-                            title = f"|{label_base}|"
+                        
                         else:
                             raise ValueError(f"Unknown plot_format: {fmt}")
 
@@ -103,7 +98,7 @@ class SpectrumPlotter:
                             y,
                             extent=extent,
                             origin='lower',
-                            cmap='seismic' if fmt in ['re', 'im'] else 'viridis',
+                            cmap='seismic',
                             aspect='auto',
                             vmin=vmin,
                             vmax=vmax
