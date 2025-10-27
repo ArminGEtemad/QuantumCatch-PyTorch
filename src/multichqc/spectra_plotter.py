@@ -19,63 +19,42 @@ class SpectrumPlotter:
                 print(f"Warning: No spectrum of order {key} found.")
                 continue
 
-            is_s3 = order == 3
-            n_entries = len(spectrum_dict)
+            n_pairs = len(spectrum_dict)
             n_panels = len(self.plot_config.plot_format)
 
             fig, axes = plt.subplots(
-                nrows=n_entries,
+                nrows=n_pairs,
                 ncols=n_panels,
-                figsize=(6 * n_panels, 3.5 * n_entries),
-                squeeze=False
+                figsize=(6 * n_panels, 3.5 * n_pairs),
+                sharex=True
             )
 
-            for row_idx, (ops, data) in enumerate(spectrum_dict.items()):
-                if is_s3:
-
-                    data = data[mask][:, mask]
-                    label_base = f"({ops[0]}, {ops[1]}, {ops[2]})"
-                else:
-                    data = data[mask]
-                    label_base = f"({ops[0]}, {ops[1]})"
+            if n_pairs == 1 and n_panels == 1:
+                axes = [[axes]]
+            elif n_pairs == 1:
+                axes = [axes]
+            elif n_panels == 1:
+                axes = [[ax] for ax in axes]
+            for row_idx, ((op0, op1), data) in enumerate(spectrum_dict.items()):
+                data = data[mask]
+                label_base = f"({op0}, {op1})"
 
                 for col_idx, fmt in enumerate(self.plot_config.plot_format):
                     ax = axes[row_idx][col_idx]
 
                     if fmt == "re":
                         y = data.real
-                        title = f"Re {label_base}"
+                        ax.set_title(f"Re {label_base}")
                     elif fmt == "im":
                         y = data.imag
-                        title = f"Im {label_base}"
+                        ax.set_title(f"Im {label_base}")
                     elif fmt == "abs":
-                        y = torch.abs(torch.tensor(data)) if not isinstance(data, torch.Tensor) else torch.abs(data)
-                        title = f"|{label_base}|"
+                        y = torch.abs(data)
+                        ax.set_title(f"|{label_base}|")
                     else:
                         raise ValueError(f"Unknown plot_format: {fmt}")
 
-                    ax.set_title(title)
-
-                    if is_s3:
-                        vmax = torch.max(torch.abs(torch.tensor(y))).item()
-                        vmin = -vmax
-
-                        im = ax.imshow(
-                            y,
-                            extent=(freq[0], freq[-1], freq[0], freq[-1]),
-                            origin='lower',
-                            aspect='auto',
-                            cmap='seismic',
-                            vmin=vmin,
-                            vmax=vmax
-                        )
-                        ax.set_xlabel("f")
-                        ax.set_ylabel("f")
-                        fig.colorbar(im, ax=ax)
-                    else:
-                        ax.plot(freq.cpu().numpy(), y)
-                        ax.set_xlabel("f")
-                        ax.set_ylabel("s2")
+                    ax.plot(freq.cpu().numpy(), y)
 
             plt.tight_layout(rect=[0, 0, 1, 0.96])
             plt.show()
