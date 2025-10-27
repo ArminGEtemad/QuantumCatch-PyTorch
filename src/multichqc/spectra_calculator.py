@@ -262,7 +262,7 @@ def s2_batched(
 
     return result_dict
 
-def S3_batched(
+def s3_batched(
     hamiltonian: Tensor, 
     liouvillian: Tensor, 
     measure_dict: Dict[str, Tensor], 
@@ -273,7 +273,7 @@ def S3_batched(
     backend: str,
     key='s3',
     chunk_size: int | None = None,
-) -> torch.Tensor:
+) -> Dict[Tuple[str, str, str], Tensor]:
     
     used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
     used_measure_dict = {k: measure_dict[k] for k in used_keys}
@@ -297,6 +297,7 @@ def S3_batched(
 
     result_dict = {}
     for op0_key, op1_key, op2_key in measureOrder_dict[key]:
+
         a0 = a_prim_dict[op0_key]
         a1 = a_prim_dict[op1_key]
         a2 = a_prim_dict[op2_key]
@@ -316,9 +317,9 @@ def S3_batched(
         for start in range(0, b, chunk_size):
             stop = min(start + chunk_size, b) 
             sl = slice(start, stop)
-            Bb   = stop - start 
+            Bb = stop - start 
 
-            omega_block = [omega[sl] for omega in omega_vec_full] 
+            omega_block = [w[sl] for w in omega_vec_full] 
 
             G1 = [g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, omega_block[n])
                 for n in range(3)]
@@ -363,7 +364,7 @@ class SpectrumCalculator:
 
         if 's2' in self.requested_order_list:
             self.s2 = self._compute_s2()
-        elif 's3' in self.requested_order_list:
+        if 's3' in self.requested_order_list:
             self.s3 = self._compute_s3()
 
     def _compute_liouvillian(self):
@@ -390,7 +391,7 @@ class SpectrumCalculator:
         )
     
     def _compute_s3(self):
-        return S3_batched(
+        return s3_batched(
             self.sys_config.hamiltonian,
             self.liouvillian,
             self.sys_config.measurement_ops,
@@ -399,5 +400,6 @@ class SpectrumCalculator:
             self.rho_0,
             self.omega,
             self.backend,
-            key='s3'
+            key='s3',
+            chunk_size=self.spe_config.s3_block_size,
         )
