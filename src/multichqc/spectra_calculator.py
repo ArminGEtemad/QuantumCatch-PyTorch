@@ -221,6 +221,7 @@ def s2_batched(
         omega: Tensor,
         backend: str,
         key='s2',
+
 ) -> Dict[Tuple[str, str], Tensor]:
             
     # Get only the operators we’ll actually use
@@ -261,6 +262,91 @@ def s2_batched(
 
     return result_dict
 
+def S3_batched(
+    hamiltonian: Tensor, 
+    liouvillian: Tensor, 
+    measure_dict: Dict[str, Tensor], 
+    beta_dict: Dict[str, float], 
+    measureOrder_dict: Dict[str, list[Tuple[str, str]]], 
+    rho_0: Tensor,
+    omega: Tensor,
+    backend: str,
+    key='s3',
+    chunk_size: int | None = None,
+) -> torch.Tensor:
+    
+    used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
+    used_measure_dict = {k: measure_dict[k] for k in used_keys}
+
+    omega_1, omega_2 = torch.meshgrid(omega, omega, indexing='ij')
+    end_shape = omega.numel()
+    omega_1_f, omega_2_f = omega_1.flatten(), omega_2.flatten() 
+    omega_3_f = -(omega_1_f + omega_2_f)
+
+    omega_vec_full = [omega_1_f, omega_2_f, omega_3_f]
+
+    b = omega_1_f.numel()
+    if not chunk_size or chunk_size <= 0:
+        chunk_size = b
+
+    shape_hamiltonian = hamiltonian.shape[0]
+
+    a_prim_dict = mathcal_a_prim(hamiltonian, rho_0, used_measure_dict, backend)
+
+    evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
+
+    result_dict = {}
+    for op0_key, op1_key, op2_key in measureOrder_dict[key]:
+        a0 = a_prim_dict[op0_key]
+        a1 = a_prim_dict[op1_key]
+        a2 = a_prim_dict[op2_key]
+
+        a0_rho = a0 @ rho_0
+        a1_rho = a1 @ rho_0
+        a2_rho = a2 @ rho_0
+
+        a_rho = [a0_rho, a1_rho, a2_rho]
+        a_b = [a.unsqueeze(0) for a in (a0, a1, a2)]
+        a_rho_b = [r.unsqueeze(0) for r in a_rho]
+
+        res_flat = torch.zeros(b, dtype=COMPLEX64_TYPE, device=backend)
+
+        perms = ((0,1,2),(0,2,1),(1,0,2),(1,2,0),(2,0,1),(2,1,0))
+
+        for start in range(0, b, chunk_size):
+            stop = min(start + chunk_size, b) 
+            sl = slice(start, stop)
+            Bb   = stop - start 
+
+            omega_block = [omega[sl] for omega in omega_vec_full] 
+
+            G1 = [g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, omega_block[n])
+                for n in range(3)]
+            
+            G2 = [[None]*3 for _ in range(3)]
+            for m in range(3):
+                for n in range(3):
+                    omega_mn = omega_block[m] + omega_block[n]
+                    G2[m][n] = g_nu_batch_unique(
+                        evals, evecs, evecs_inverse, zero_ind, small_indices, omega_mn)
+
+            chunk_out = torch.zeros(Bb, dtype=COMPLEX64_TYPE, device=backend)
+
+            for l, m, n in perms:
+                tmp = torch.bmm(G2[m][n], a_rho_b[l].expand(Bb, -1, -1))
+                tmp = torch.bmm(a_b[m].expand(Bb, -1, -1), tmp)
+                tmp = torch.bmm(G1[n], tmp)
+                tmp = torch.bmm(a_b[n].expand(Bb, -1, -1), tmp).squeeze(-1)
+
+                chunk_out += tmp.view(Bb, shape_hamiltonian, shape_hamiltonian)\
+                                .diagonal(dim1=-2, dim2=-1).sum(-1)
+
+            res_flat[sl] = chunk_out 
+        pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2 * (beta_dict[op2_key])**2
+        res_flat *= pref
+        result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape).cpu().numpy()
+    return result_dict
+
 class SpectrumCalculator:
     def __init__(self, spe_config: SpectrumConfig, sys_config: SystemConfig):
         self.spe_config = spe_config
@@ -273,9 +359,12 @@ class SpectrumCalculator:
         self.rho_0 = rho_steady(sys_config.hamiltonian, self.liouvillian, self.backend)
         self.requested_order_list = list(spe_config.order_combi.keys())
         self.s2 = None
+        self.s3 = None
 
         if 's2' in self.requested_order_list:
             self.s2 = self._compute_s2()
+        elif 's3' in self.requested_order_list:
+            self.s3 = self._compute_s3()
 
     def _compute_liouvillian(self):
         return liouvillian_superoperator(
@@ -298,4 +387,17 @@ class SpectrumCalculator:
             self.omega,
             self.backend,
             key='s2'
+        )
+    
+    def _compute_s3(self):
+        return S3_batched(
+            self.sys_config.hamiltonian,
+            self.liouvillian,
+            self.sys_config.measurement_ops,
+            self.sys_config.measurement_strength,
+            self.spe_config.order_combi,
+            self.rho_0,
+            self.omega,
+            self.backend,
+            key='s3'
         )
