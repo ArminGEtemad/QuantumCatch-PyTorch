@@ -32,7 +32,8 @@ spe_config = SpectrumConfig(
     f_min=f_min,
     f_max=f_max,
     order_combi=measure_order,
-    backend='cuda'
+    s3_block=None,
+    backend='cpu'
 )
 
 sys_config = SystemConfig(
