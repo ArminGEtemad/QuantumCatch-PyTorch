@@ -363,7 +363,7 @@ class SpectrumCalculator:
 
         if 's2' in self.requested_order_list:
             self.s2 = self._compute_s2()
-        elif 's3' in self.requested_order_list:
+        if 's3' in self.requested_order_list:
             self.s3 = self._compute_s3()
 
     def _compute_liouvillian(self):
@@ -399,5 +399,6 @@ class SpectrumCalculator:
             self.rho_0,
             self.omega,
             self.backend,
-            key='s3'
+            key='s3',
+            chunk_size=self.spe_config.s3_block
         )
