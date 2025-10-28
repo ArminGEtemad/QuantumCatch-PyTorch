@@ -233,8 +233,8 @@ def s2_batched(
 
     # Diagonalize Liouvillian
     evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
-    g_plus  = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices,  omega)
-    g_minus = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, -omega)
+    g_plus  = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices,  omega)
+    g_minus = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, -omega)
 
     shape_hamiltonian = hamiltonian.shape[0]
     b = omega.numel()
@@ -273,19 +273,20 @@ def S3_batched(
     backend: str,
     key='s3',
     chunk_size: int | None = None,
-) -> torch.Tensor:
+) -> Dict[Tuple[str, str], Tensor]:
     
+    # getting the keys that are actually used
     used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
     used_measure_dict = {k: measure_dict[k] for k in used_keys}
 
     omega_1, omega_2 = torch.meshgrid(omega, omega, indexing='ij')
-    end_shape = omega.numel()
+    end_shape = omega.numel() # the shape after unflattening 
     omega_1_f, omega_2_f = omega_1.flatten(), omega_2.flatten() 
     omega_3_f = -(omega_1_f + omega_2_f)
 
     omega_vec_full = [omega_1_f, omega_2_f, omega_3_f]
 
-    b = omega_1_f.numel()
+    b = omega_1_f.numel() # batching size
     if not chunk_size or chunk_size <= 0:
         chunk_size = b
 
@@ -311,6 +312,7 @@ def S3_batched(
 
         res_flat = torch.zeros(b, dtype=COMPLEX64_TYPE, device=backend)
 
+        # TODO: the needed permutations (REFACTOR LATER)
         perms = ((0,1,2),(0,2,1),(1,0,2),(1,2,0),(2,0,1),(2,1,0))
 
         for start in range(0, b, chunk_size):
@@ -320,14 +322,14 @@ def S3_batched(
 
             omega_block = [omega[sl] for omega in omega_vec_full] 
 
-            G1 = [g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, omega_block[n])
+            G1 = [g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, omega_block[n])
                 for n in range(3)]
             
             G2 = [[None]*3 for _ in range(3)]
             for m in range(3):
                 for n in range(3):
                     omega_mn = omega_block[m] + omega_block[n]
-                    G2[m][n] = g_nu_batch_unique(
+                    G2[m][n] = g_nu_batch(
                         evals, evecs, evecs_inverse, zero_ind, small_indices, omega_mn)
 
             chunk_out = torch.zeros(Bb, dtype=COMPLEX64_TYPE, device=backend)
@@ -344,7 +346,12 @@ def S3_batched(
             res_flat[sl] = chunk_out 
         pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2 * (beta_dict[op2_key])**2
         res_flat *= pref
-        result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape).cpu().numpy()
+
+        # sending the results back to cpu if they are on gpu
+        if backend != 'cpu':
+            result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape).cpu().numpy()
+        else:
+            result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape)
     return result_dict
 
 class SpectrumCalculator:
