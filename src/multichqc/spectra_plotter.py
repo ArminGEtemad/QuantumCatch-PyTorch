@@ -111,5 +111,59 @@ class SpectrumPlotter:
                 plt.tight_layout()
                 plt.show()
 
+            elif order == 4:
+                # --- S4: stacked heatmaps in one figure ---
+                freq_full = self.calc.freq
+                extent = (freq_full[0], freq_full[-1], freq_full[0], freq_full[-1])
+
+                fig, axes = plt.subplots(
+                    nrows=n_entries,
+                    ncols=n_panels,
+                    figsize=(6 * n_panels, 3.5 * n_entries),
+                    squeeze=False,
+                    sharex=True,
+                    sharey=True
+                )
+
+                for row_idx, (ops, data) in enumerate(spectrum_dict.items()):
+                    label_base = f"({', '.join(ops)})"
+                    data_real = torch.tensor(data.real)
+                    data_imag = torch.tensor(data.imag)
+
+                    for col_idx, fmt in enumerate(self.plot_config.plot_format):
+                        ax = axes[row_idx][col_idx]
+
+                        if fmt == "re":
+                            y = data_real
+                            vmax = torch.max(torch.abs(y)).item()
+                            vmin = -vmax
+                            title = f"Re {label_base}"
+                            cmap = "seismic"
+                        elif fmt == "im":
+                            y = data_imag
+                            vmax = torch.max(torch.abs(y)).item()
+                            vmin = -vmax
+                            title = f"Im {label_base}"
+                            cmap = "seismic"
+                        else:
+                            raise ValueError(f"Unknown plot_format: {fmt}")
+
+                        im = ax.imshow(
+                            y,
+                            extent=extent,
+                            origin='lower',
+                            cmap=cmap,
+                            aspect='auto',
+                            vmin=vmin,
+                            vmax=vmax
+                        )
+                        ax.set_title(title)
+                        ax.set_xlabel("ω₁")
+                        ax.set_ylabel("ω₂")
+                        fig.colorbar(im, ax=ax)
+
+                plt.tight_layout()
+                plt.show()
+
             else:
                 print(f"Order {order} is not yet supported.")
