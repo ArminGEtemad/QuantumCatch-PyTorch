@@ -37,7 +37,7 @@ Resolution |   Avg Time (s)|
 
 
 ARM64 MacBook : batch
-Resolution |   Avg Time (s)|
+|Resolution |   Avg Time (s)|
 |-------------|-----------|
  |       32 |       0.016152|
  |       64 |       0.030861|
@@ -47,3 +47,49 @@ Resolution |   Avg Time (s)|
  |     1024 |       3.514839|
  |     2048 |      15.322787|
  |     4096 |     108.657303|
+
+
+Our PC didn't have the capacity to calculate s3 and s4 with high resolution at once (more below) so the first benchmark could be done up tp $2^10$. 
+13th Gen Intel Core i9-13900KS : batch
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|        32 |       0.031009|
+|        64 |       0.069300|
+|       128 |       0.124708|
+|       256 |       0.230146|
+|       512 |       0.720663|
+|      1024 |       3.440802|
+
+13th Gen Intel Core i9-13900KS : unique
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|        32 |       0.022405|
+|        64 |       0.053213|
+|       128 |       0.093348|
+|       256 |       0.190909|
+|       512 |       0.612202|
+ |     1024 |       2.802864|
+
+
+NVIDIA GeForce RTX 4090 : batch
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|        32 |       0.035057|
+ |       64 |       0.034536|
+|       128 |       0.036333|
+|       256 |       0.047844|
+|       512 |       0.096085|
+|      1024 |       0.334867|
+
+
+NVIDIA GeForce RTX 4090 : unique
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|        32 |       0.042166|
+|        64 |       0.044177|
+|       128 |       0.053425|
+|       256 |       0.088606|
+|       512 |       0.239342|
+|      1024 |       0.817418|
+
+I have wrote the saftey measure `block` which can be used if the whole matrix multiplication cannot be done in one go. Here I choose
