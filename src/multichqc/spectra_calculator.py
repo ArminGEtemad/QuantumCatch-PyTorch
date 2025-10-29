@@ -3,6 +3,7 @@ import torch
 from typing import Tuple, Dict, Sequence, Optional
 from torch import Tensor
 import matplotlib.pyplot as plt
+from itertools import permutations
 from multichqc.input_config import SpectrumConfig
 from multichqc.system_config import SystemConfig
 
@@ -258,11 +259,14 @@ def s2_batched(
         tr_sum = torch.einsum('bii->b', s2_1) + torch.einsum('bii->b', s2_2)
 
         pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2
-        result_dict[(op0_key, op1_key)] = (pref * tr_sum).cpu().numpy() # save the result back in CPU
+        if backend != 'cpu':
+            result_dict[(op0_key, op1_key)] = (pref * tr_sum).cpu().numpy() # save the result back in CPU
+        else:
+            result_dict[(op0_key, op1_key)] = (pref * tr_sum)
 
     return result_dict
 
-def S3_batched(
+def s3_batched(
     hamiltonian: Tensor, 
     liouvillian: Tensor, 
     measure_dict: Dict[str, Tensor], 
@@ -280,7 +284,7 @@ def S3_batched(
     used_measure_dict = {k: measure_dict[k] for k in used_keys}
 
     omega_1, omega_2 = torch.meshgrid(omega, omega, indexing='ij')
-    end_shape = omega.numel() # the shape after unflattening 
+    end_shape = omega.numel()
     omega_1_f, omega_2_f = omega_1.flatten(), omega_2.flatten() 
     omega_3_f = -(omega_1_f + omega_2_f)
 
@@ -295,6 +299,8 @@ def S3_batched(
     a_prim_dict = mathcal_a_prim(hamiltonian, rho_0, used_measure_dict, backend)
 
     evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
+    # TODO: the needed permutations (REFACTOR LATER)
+    perms = ((0,1,2),(0,2,1),(1,0,2),(1,2,0),(2,0,1),(2,1,0))
 
     result_dict = {}
     for op0_key, op1_key, op2_key in measureOrder_dict[key]:
@@ -312,13 +318,10 @@ def S3_batched(
 
         res_flat = torch.zeros(b, dtype=COMPLEX64_TYPE, device=backend)
 
-        # TODO: the needed permutations (REFACTOR LATER)
-        perms = ((0,1,2),(0,2,1),(1,0,2),(1,2,0),(2,0,1),(2,1,0))
-
         for start in range(0, b, chunk_size):
             stop = min(start + chunk_size, b) 
             sl = slice(start, stop)
-            Bb   = stop - start 
+            b_b = stop - start 
 
             omega_block = [omega[sl] for omega in omega_vec_full] 
 
@@ -332,15 +335,15 @@ def S3_batched(
                     G2[m][n] = g_nu_batch(
                         evals, evecs, evecs_inverse, zero_ind, small_indices, omega_mn)
 
-            chunk_out = torch.zeros(Bb, dtype=COMPLEX64_TYPE, device=backend)
+            chunk_out = torch.zeros(b_b, dtype=COMPLEX64_TYPE, device=backend)
 
             for l, m, n in perms:
-                tmp = torch.bmm(G2[m][n], a_rho_b[l].expand(Bb, -1, -1))
-                tmp = torch.bmm(a_b[m].expand(Bb, -1, -1), tmp)
+                tmp = torch.bmm(G2[m][n], a_rho_b[l].expand(b_b, -1, -1))
+                tmp = torch.bmm(a_b[m].expand(b_b, -1, -1), tmp)
                 tmp = torch.bmm(G1[n], tmp)
-                tmp = torch.bmm(a_b[n].expand(Bb, -1, -1), tmp).squeeze(-1)
+                tmp = torch.bmm(a_b[n].expand(b_b, -1, -1), tmp).squeeze(-1)
 
-                chunk_out += tmp.view(Bb, shape_hamiltonian, shape_hamiltonian)\
+                chunk_out += tmp.view(b_b, shape_hamiltonian, shape_hamiltonian)\
                                 .diagonal(dim1=-2, dim2=-1).sum(-1)
 
             res_flat[sl] = chunk_out 
@@ -353,6 +356,348 @@ def S3_batched(
         else:
             result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape)
     return result_dict
+
+# ----- Preparing s_4 calculations -----
+def _prepare_freq_grid(freq : Tensor, backend: str) -> Tuple[Tensor, Tensor]:
+    freq_1, freq_2 = torch.meshgrid(freq, freq, indexing='ij')
+    return freq_to_circfreq(freq_1, backend), freq_to_circfreq(freq_2, backend)
+
+def s4_batched(
+    hamiltonian: Tensor, 
+    liouvillian: Tensor, 
+    measure_dict: Dict[str, Tensor], 
+    beta_dict: Dict[str, float], 
+    measureOrder_dict: Dict[str, list[Tuple[str, str]]], 
+    rho_0: Tensor,
+    freq: Tensor,
+    backend: str,
+    key='s4',
+    chunk_size: int | None = None,
+) -> Dict[Tuple[str, str, str, str], Tensor]:
+    # 1. Prepare relevant operators
+    used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
+    used_measure_dict = {k: measure_dict[k] for k in used_keys}
+
+    # 2. Prepare frequency grid
+    omega_1, omega_2 = _prepare_freq_grid(freq, backend)  # (F, F)
+    end_shape, b = omega_1.shape[0], omega_1.numel()
+    omega_1_f, omega_2_f = omega_1.flatten(), omega_2.flatten()
+    omega_vec_full = torch.stack([omega_1_f, -omega_1_f, omega_2_f, -omega_2_f])  # (4, B)
+
+    # 3. Liouville preliminaries
+    d = hamiltonian.shape[0]
+    a_prim_dict = mathcal_a_prim(hamiltonian, rho_0, used_measure_dict, backend)
+    evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
+    perms = list(permutations(range(4), 4))
+
+    # 4. Results container
+    result_dict = {}
+
+    # 5. Iterate over all operator combinations
+    for op0_key, op1_key, op2_key, op3_key in measureOrder_dict[key]:
+        a0 = a_prim_dict[op0_key]
+        a1 = a_prim_dict[op1_key]
+        a2 = a_prim_dict[op2_key]
+        a3 = a_prim_dict[op3_key]
+
+        a0_rho = a0 @ rho_0
+        a1_rho = a1 @ rho_0
+        a2_rho = a2 @ rho_0
+        a3_rho = a3 @ rho_0
+        a_rho = [a0_rho, a1_rho, a2_rho, a3_rho]
+
+        a_b = [a.unsqueeze(0) for a in (a0, a1, a2, a3)]
+        a_rho_b = [r.unsqueeze(0) for r in a_rho]
+
+        res_flat = torch.zeros(b, dtype=COMPLEX64_TYPE, device=backend)
+
+        # Normalize chunk size
+        if not chunk_size or chunk_size <= 0:
+            chunk_size = b
+
+        # Inner compute block
+        def _do_block(idx, stop):
+            sl = slice(idx, stop)
+            w = omega_vec_full[:, sl]
+            b_b = stop - idx
+
+            # Single-index Green's
+            G1 = [g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, w[j]) for j in range(4)]
+
+            # Pair and triple caches
+            G2, G3 = {}, {}
+            out = torch.zeros(b_b, dtype=COMPLEX64_TYPE, device=backend)
+
+            for k, l, m, n in perms:
+                key2 = (m, n)
+                if key2 not in G2:
+                    G2[key2] = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, w[m] + w[n])
+                key3 = (l, m, n)
+                if key3 not in G3:
+                    G3[key3] = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, w[l] + w[m] + w[n])
+
+                tmp = torch.bmm(G3[key3], a_rho_b[k].expand(b_b, -1, -1))
+                tmp = torch.bmm(a_b[l].expand(b_b, -1, -1), tmp)
+                tmp = torch.bmm(G2[key2], tmp)
+                tmp = torch.bmm(a_b[m].expand(b_b, -1, -1), tmp)
+                tmp = torch.bmm(G1[n], tmp)
+                tmp = torch.bmm(a_b[n].expand(b_b, -1, -1), tmp).squeeze(-1)
+
+                out += tmp.view(b_b, d, d).diagonal(dim1=-2, dim2=-1).sum(-1)
+
+            pref = (
+                beta_dict[op0_key] ** 2 *
+                beta_dict[op1_key] ** 2 *
+                beta_dict[op2_key] ** 2 *
+                beta_dict[op3_key] ** 2
+            )
+
+            return out * pref
+
+        # Chunked processing
+        if chunk_size and chunk_size < b:
+            for b0 in range(0, b, chunk_size):
+                stop = min(b0 + chunk_size, b)
+                res_flat[b0:stop] = _do_block(b0, stop)
+        else:
+            res_flat = _do_block(0, b)
+
+        # Store result (with all 4 keys)
+        res_view = res_flat.view(end_shape, end_shape)
+        if backend != 'cpu':
+            res_view = res_view.cpu().numpy()
+        result_dict[(op0_key, op1_key, op2_key, op3_key)] = res_view
+
+    return result_dict
+
+def matrices_S(liouvillian: Tensor, zero_ind: int) -> Tensor:
+
+    dim = liouvillian.shape[0]
+    dtype = liouvillian.dtype
+    dev = liouvillian.device
+
+    S = torch.zeros((dim, dim, dim), dtype=dtype, device=dev)
+    idx = torch.arange(dim, device=dev)
+    mask = idx != zero_ind
+    S[mask, idx[mask], idx[mask]] = 1.0
+    return S
+
+
+def _small_s_for_ops(
+    hamiltonian: Tensor,
+    liouvillian: Tensor,
+    aprim_list: list[Tensor],   # ordered [a0', a1', a2', a3'] for THIS operator quad
+    rho0: Tensor,
+    evecs: Tensor,
+    evecs_inv: Tensor,
+    zero_ind: int,
+) -> tuple[Tensor, list[tuple[int,int]]]:
+
+    dev = liouvillian.device
+    dtype = liouvillian.dtype
+    dim = liouvillian.shape[0]
+    hdim = hamiltonian.shape[0]
+
+    # all pairs with n ≠ k on 4 operators
+    nk_pairs = [(n, k) for n in range(4) for k in range(4) if n != k]
+
+    # projectors in Liouvillian eigenbasis (skip steady-state)
+    S = matrices_S(liouvillian, zero_ind)
+
+    D = torch.stack([evecs @ S_alpha @ evecs_inv for S_alpha in S])
+
+    # pre-multiply ρ0 once
+    aprim_rho0 = [A @ rho0 for A in aprim_list]
+
+    # s has one row per Liouvillian eigenmode, zeroing steady state row
+    s = torch.zeros((dim, len(nk_pairs)), dtype=dtype, device=dev)
+    for alpha in range(dim):
+        if alpha == zero_ind:
+            continue
+        D_alpha = D[alpha]
+        for p_idx, (n, k) in enumerate(nk_pairs):
+            term = aprim_list[n] @ D_alpha @ aprim_rho0[k]
+            s[alpha, p_idx] = term.reshape(hdim, hdim).trace()
+
+    return s, nk_pairs
+
+def s4_corr_batched(
+    hamiltonian: Tensor, 
+    liouvillian: Tensor, 
+    rho_0: Tensor,
+    measure_dict: Dict[str, Tensor], 
+    beta_dict: Dict[str, float], 
+    measureOrder_dict: Dict[str, list[Tuple[str, str, str, str]]],  
+    freq: Tensor,
+    backend: str,
+    chunk_size: int | None = None,
+    key: str = 's4',
+    which: str = "1",   # "1" => (lambda_a, lambda_a, lambda_a+lambda_b),
+                        # "2" => (lambda_b, lambda_a, lambda_a+lambda_b)
+) -> Dict[Tuple[str, str, str, str], Tensor]:
+
+    # --- prep freq grid (F,F) → flattened vectors
+    omega_1, omega_2 = _prepare_freq_grid(freq, backend)
+    end_shape = omega_1.shape[0]
+    omega_1_f, omega_2_f = omega_1.flatten(), omega_2.flatten()
+    b = omega_1_f.numel()
+    Omega = torch.stack([omega_1_f, -omega_1_f, omega_2_f, -omega_2_f])
+
+   
+    evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
+    dev = liouvillian.device
+
+    # mask out steady-state eigenvalue
+    mask = torch.arange(evals.numel(), device=dev) != zero_ind
+    lam  = evals[mask]
+    d_L  = lam.numel()
+
+    lam_a = lam.view(d_L, 1, 1)
+    lam_b = lam.view(1, d_L, 1)
+
+    if not chunk_size or chunk_size <= 0:
+        chunk_size = b
+
+    perms4 = list(permutations(range(4), 4))
+
+    result_dict = {}
+
+    # Build only the operators we’ll actually use
+    used_keys = set(k for quad in measureOrder_dict[key] for k in quad)
+    used_measure_dict = {k: measure_dict[k] for k in used_keys}
+
+    a_prim_dict = mathcal_a_prim(hamiltonian, rho_0, used_measure_dict, backend)
+
+    # for each operator quad, compute its correction
+    for op0_key, op1_key, op2_key, op3_key in measureOrder_dict[key]:
+        # order the four a' according to this tuple
+        a0 = a_prim_dict[op0_key]
+        a1 = a_prim_dict[op1_key]
+        a2 = a_prim_dict[op2_key]
+        a3 = a_prim_dict[op3_key]
+        a_list = [a0, a1, a2, a3]
+
+        # s_{α}^{n,k} table for this ordering
+        s_nk_full, nk_pairs = _small_s_for_ops(
+            hamiltonian, liouvillian, a_list, rho_0, evecs, evecs_inverse, zero_ind
+        )
+        # keep only non-steady rows
+        s_nk = s_nk_full[mask]
+        pair2idx = {p: i for i, p in enumerate(nk_pairs)}
+
+        pref = (
+            beta_dict[op0_key] ** 2 *
+            beta_dict[op1_key] ** 2 *
+            beta_dict[op2_key] ** 2 *
+            beta_dict[op3_key] ** 2
+        )
+
+        # accumulator over the whole grid
+        res_flat = torch.zeros(b, dtype=COMPLEX64_TYPE, device=dev)
+
+        # process frequency blocks
+        for start in range(0, b, chunk_size):
+            stop = min(start + chunk_size, b)
+            sl = slice(start, stop)
+            b_b = stop - start
+
+            nu = Omega[:, sl] 
+            nu_i = [1j * nu[j].view(1, 1, b_b) for j in range(4)]
+
+            block_sum = torch.zeros(b_b, dtype=COMPLEX64_TYPE, device=dev)
+
+            for n, m, l, k in perms4:
+                # pick the two s-columns by pair indices
+                s_alpha = s_nk[:, pair2idx[(n, k)]]
+                s_beta  = s_nk[:, pair2idx[(m, l)]]
+
+                # outer product over α and β (d_L, d_L, 1)
+                num = s_alpha.view(d_L, 1, 1) * s_beta.view(1, d_L, 1)
+
+                # frequency combinations as per publication
+                nu1 = nu_i[l] + nu_i[m] + nu_i[n]
+                nu2 = nu_i[m] + nu_i[n]
+                nu3 = nu_i[n]
+
+                if which == "1":
+                    denom = (lam_a + nu1) * (lam_a + nu3) * (lam_a + lam_b + nu2)
+                else:  # which == "2"
+                    denom = (lam_b + nu1) * (lam_a + nu3) * (lam_a + lam_b + nu2)
+
+                block_sum += (num / denom).sum((0, 1))
+
+            res_flat[sl] = block_sum
+
+        res = pref * res_flat.view(end_shape, end_shape)
+
+        if backend != 'cpu':
+            res = res.cpu().numpy()
+        result_dict[(op0_key, op1_key, op2_key, op3_key)] = res
+
+    return result_dict
+
+def _sum_spectra_dicts(*spectra_dicts: Dict[Tuple[str, str, str, str], object]
+) -> Dict[Tuple[str, str, str, str], object]:
+
+    if not spectra_dicts:
+        return {}
+
+    # enforce identical keysets
+    keyset = set(spectra_dicts[0].keys())
+    for i, d in enumerate(spectra_dicts[1:], start=2):
+        if set(d.keys()) != keyset:
+            missing_left = keyset - set(d.keys())
+            missing_right = set(d.keys()) - keyset
+            raise KeyError(
+                f"Spectrum dict #{i} has mismatched keys.\n"
+                f"Missing in dict #{i}: {sorted(missing_left)}\n"
+                f"Extra in dict #{i}: {sorted(missing_right)}"
+            )
+
+    # sum values per key
+    out: Dict[Tuple[str, str, str, str], object] = {}
+    for k in keyset:
+        acc = spectra_dicts[0][k]
+        for d in spectra_dicts[1:]:
+            acc = acc + d[k]
+        out[k] = acc
+    return out
+
+
+def S4_total(
+    hamiltonian: Tensor, 
+    liouvillian: Tensor, 
+    measure_dict: Dict[str, Tensor], 
+    beta_dict: Dict[str, float], 
+    measureOrder_dict: Dict[str, list[Tuple[str, str]]], 
+    rho_0: Tensor,
+    freq: Tensor,
+    backend: str,
+    key='s4',
+    chunk_size: int | None = None,
+) -> Dict[Tuple[str, str, str, str], object]:
+
+    S_main = s4_batched(
+        hamiltonian, liouvillian, measure_dict,
+        beta_dict, measureOrder_dict, rho_0,
+        freq, backend, key=key, chunk_size=chunk_size
+    )
+
+    S_c1 = s4_corr_batched(
+        hamiltonian, liouvillian, rho_0,
+        measure_dict, beta_dict, measureOrder_dict,
+        freq, backend, chunk_size=chunk_size, key=key, which="1"
+    )
+
+    S_c2 = s4_corr_batched(
+        hamiltonian, liouvillian, rho_0,
+        measure_dict, beta_dict, measureOrder_dict,
+        freq, backend, chunk_size=chunk_size, key=key, which="2"
+    )
+
+    return _sum_spectra_dicts(S_main, S_c1, S_c2)
+
+
 
 class SpectrumCalculator:
     def __init__(self, spe_config: SpectrumConfig, sys_config: SystemConfig):
@@ -367,11 +712,14 @@ class SpectrumCalculator:
         self.requested_order_list = list(spe_config.order_combi.keys())
         self.s2 = None
         self.s3 = None
+        self.s4 = None
 
         if 's2' in self.requested_order_list:
             self.s2 = self._compute_s2()
         if 's3' in self.requested_order_list:
             self.s3 = self._compute_s3()
+        if 's4' in self.requested_order_list:
+            self.s4 = self._compute_s4()
 
     def _compute_liouvillian(self):
         return liouvillian_superoperator(
@@ -397,7 +745,7 @@ class SpectrumCalculator:
         )
     
     def _compute_s3(self):
-        return S3_batched(
+        return s3_batched(
             self.sys_config.hamiltonian,
             self.liouvillian,
             self.sys_config.measurement_ops,
@@ -408,4 +756,18 @@ class SpectrumCalculator:
             self.backend,
             key='s3',
             chunk_size=self.spe_config.s3_block
+        )
+    
+    def _compute_s4(self):
+        return S4_total(
+            self.sys_config.hamiltonian,
+            self.liouvillian,
+            self.sys_config.measurement_ops,
+            self.sys_config.measurement_strength,
+            self.spe_config.order_combi,
+            self.rho_0,
+            self.freq, # this is correct TODO: consistent with other functions
+            self.backend,
+            key='s4',
+            chunk_size=self.spe_config.s4_block
         )
