@@ -8,6 +8,7 @@ class SpectrumConfig:
     f_max: float
     order_combi: Dict[str, list[Tuple[str, str]]]
     s3_block: int
+    s4_block: int
     backend: Literal['cpu', 'cuda']
 
     def __post_init__(self):
