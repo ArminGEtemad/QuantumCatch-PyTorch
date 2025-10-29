@@ -45,9 +45,6 @@ class SpectrumPlotter:
                         elif fmt == "im":
                             y = data.imag
                             ax.set_title(f"Im {label_base}")
-                        elif fmt == "abs":
-                            y = torch.abs(torch.tensor(data))
-                            ax.set_title(f"|{label_base}|")
                         else:
                             raise ValueError(f"Unknown plot_format: {fmt}")
 
@@ -58,7 +55,7 @@ class SpectrumPlotter:
                 plt.tight_layout()
                 plt.show()
 
-            elif order == 3:
+            if order == 3:
                 # --- S3: stacked heatmaps in one figure ---
                 freq_full = self.calc.freq
                 extent = (freq_full[0], freq_full[-1], freq_full[0], freq_full[-1])
@@ -111,7 +108,7 @@ class SpectrumPlotter:
                 plt.tight_layout()
                 plt.show()
 
-            elif order == 4:
+            if order == 4:
                 # --- S4: stacked heatmaps in one figure ---
                 freq_full = self.calc.freq
                 extent = (freq_full[0], freq_full[-1], freq_full[0], freq_full[-1])
