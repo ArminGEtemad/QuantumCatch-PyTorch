@@ -234,8 +234,8 @@ def s2_batched(
 
     # Diagonalize Liouvillian
     evals, evecs, evecs_inverse, zero_ind, small_indices, _ = diag_liouvillian(liouvillian)
-    g_plus  = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices,  omega)
-    g_minus = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, -omega)
+    g_plus  = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices,  omega)
+    g_minus = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, -omega)
 
     shape_hamiltonian = hamiltonian.shape[0]
     b = omega.numel()
@@ -332,7 +332,7 @@ def s3_batched(
             for m in range(3):
                 for n in range(3):
                     omega_mn = omega_block[m] + omega_block[n]
-                    G2[m][n] = g_nu_batch(
+                    G2[m][n] = g_nu_batch_unique(
                         evals, evecs, evecs_inverse, zero_ind, small_indices, omega_mn)
 
             chunk_out = torch.zeros(b_b, dtype=COMPLEX64_TYPE, device=backend)
@@ -422,7 +422,7 @@ def s4_batched(
             b_b = stop - idx
 
             # Single-index Green's
-            G1 = [g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, w[j]) for j in range(4)]
+            G1 = [g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, w[j]) for j in range(4)]
 
             # Pair and triple caches
             G2, G3 = {}, {}
@@ -431,10 +431,10 @@ def s4_batched(
             for k, l, m, n in perms:
                 key2 = (m, n)
                 if key2 not in G2:
-                    G2[key2] = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, w[m] + w[n])
+                    G2[key2] = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, w[m] + w[n])
                 key3 = (l, m, n)
                 if key3 not in G3:
-                    G3[key3] = g_nu_batch(evals, evecs, evecs_inverse, zero_ind, small_indices, w[l] + w[m] + w[n])
+                    G3[key3] = g_nu_batch_unique(evals, evecs, evecs_inverse, zero_ind, small_indices, w[l] + w[m] + w[n])
 
                 tmp = torch.bmm(G3[key3], a_rho_b[k].expand(b_b, -1, -1))
                 tmp = torch.bmm(a_b[l].expand(b_b, -1, -1), tmp)
