@@ -349,12 +349,14 @@ def s3_batched(
             res_flat[sl] = chunk_out 
         pref = (beta_dict[op0_key])**2 * (beta_dict[op1_key])**2 * (beta_dict[op2_key])**2
         res_flat *= pref
+        res_matrix = res_flat.view(end_shape, end_shape)
+        res_matrix = res_matrix.t()
 
         # sending the results back to cpu if they are on gpu
         if backend != 'cpu':
-            result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape).cpu().numpy()
+            result_dict[(op0_key, op1_key, op2_key)] = res_matrix.cpu().numpy()
         else:
-            result_dict[(op0_key, op1_key, op2_key)] = res_flat.view(end_shape, end_shape)
+            result_dict[(op0_key, op1_key, op2_key)] = res_matrix
     return result_dict
 
 # ----- Preparing s_4 calculations -----
@@ -695,7 +697,9 @@ def S4_total(
         freq, backend, chunk_size=chunk_size, key=key, which="2"
     )
 
-    return _sum_spectra_dicts(S_main, S_c1, S_c2)
+    sum_spec = _sum_spectra_dicts(S_main, S_c1, S_c2)
+    out = {k: v.T for k, v in sum_spec.items()}
+    return out
 
 
 
