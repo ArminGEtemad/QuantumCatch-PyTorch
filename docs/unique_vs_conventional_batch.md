@@ -92,4 +92,33 @@ NVIDIA GeForce RTX 4090 : unique
 |       512 |       0.239342|
 |      1024 |       0.817418|
 
-I have wrote the saftey measure `block` which can be used if the whole matrix multiplication cannot be done in one go. Here I choose
+I have wrote the saftey measure `block` which can be used if the whole matrix multiplication cannot be done in one go. Here I choose `block = 2^16`. The reason for power 16 was that it was the highest power of two that worked for all the three resolutions I wanted to test on without memory leak. (The bigger the block the faster the calculation.)
+
+13th Gen Intel Core i9-13900KS : batch
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|      2048 |      13.771163|
+|      4096 |      60.684534|
+|      8192 |     239.679571|
+
+13th Gen Intel Core i9-13900KS : unique
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+ |     2048 |      15.942254|
+ |     4096 |      76.528558|
+ |     8192 |     355.533826|
+
+NVIDIA GeForce RTX 4090 : batch
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|      2048 |       2.286470|
+|      4096 |       9.065482|
+|       8192|       memory leak|
+
+NVIDIA GeForce RTX 4090 : unique
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|      2048 |       6.541375|
+|      4096 |      36.142656|
+|      8192 |     199.186671|
+
