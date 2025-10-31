@@ -118,7 +118,18 @@ NVIDIA GeForce RTX 4090 : unique
 |       512 |       0.239342|
 |      1024 |       0.817418|
 
+Here is the results:
+
+![benchmark](Bench.png)
+
 I have wrote the saftey measure `block` which can be used if the whole matrix multiplication cannot be done in one go. Here I choose `block = 2^16`. The reason for power 16 was that it was the highest power of two that worked for all the three resolutions I wanted to test on without memory leak. (The bigger the block the faster the calculation.)
+
+ARM64 MacBook : batch
+|Resolution |   Avg Time (s)|
+|-----------|------------|
+|      2048 |      14.374719|
+|      4096 |      55.665838|
+|      8192 |     223.368022|
 
 ARM64 MacBook : unique
 |Resolution |   Avg Time (s)|
@@ -155,6 +166,7 @@ NVIDIA GeForce RTX 4090 : unique
 |      4096 |      36.142656|
 |      8192 |     199.186671|
 
+![benchmark](Bench1.png)
 
 # Conclusion
 
