@@ -1,5 +1,67 @@
 # Benchmarking
 
+## Code
+The `batch` function is:
+```python
+def g_nu_batch(
+        evals: Tensor, 
+        evecs: Tensor, 
+        evecs_inv: Tensor, 
+        zero_ind: Tensor, 
+        small_mask: Tensor, 
+        omega: Tensor
+) -> Tensor:
+    
+    B = omega.numel() 
+
+    denom = -evals.unsqueeze(0) - 1j * omega.unsqueeze(1)
+    denom = denom.to(evals.dtype)
+
+    inv = torch.zeros_like(denom)
+    if (~small_mask).any():
+        inv[:, ~small_mask] = 1.0 / denom[:, ~small_mask]
+
+    inv[:, zero_ind] = 0.0
+
+    evecsb = evecs.unsqueeze(0).expand(B, -1, -1)
+    evecs_invb = evecs_inv.unsqueeze(0).expand(B, -1, -1)
+
+    tmp = evecsb * inv.unsqueeze(1)
+
+    return torch.bmm(tmp, evecs_invb)
+
+
+```
+
+The `unique` function is:
+```python
+def g_nu_batch_unique(
+        evals: Tensor,
+        evecs: Tensor,
+        evecs_inv: Tensor, 
+        zero_ind: Tensor, 
+        small_mask: Tensor, 
+        omega: Tensor
+) -> Tensor:
+
+    nu_flat = omega.reshape(-1)
+    nu_cpu  = nu_flat.detach().to(torch.float64).cpu().contiguous()
+    uniq_vals, inverse = torch.unique(nu_cpu, return_inverse=True)
+
+    if uniq_vals.numel() == 0:
+        m = evals.numel()
+        return torch.zeros((0, m, m), dtype=evecs.dtype, device=evecs.device)
+
+    uniq = uniq_vals.to(device=omega.device, dtype=omega.dtype)
+    G_uniq = g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, uniq)
+
+    inverse_dev = inverse.to(G_uniq.device)
+    out = G_uniq.index_select(0, inverse_dev)
+    return out.view(nu_flat.shape[0], *G_uniq.shape[1:])
+
+```
+
+
 ## Model
 To benchmark, I used a very simple quantum system. This model has no Hamiltonian, $H = 0$, with two collapse operators:
 ```math
@@ -169,4 +231,13 @@ NVIDIA GeForce RTX 4090 : unique
 ![benchmark](Bench1.png)
 
 # Conclusion
+
+I have decided to retire the `unique` method due to the following:
+
+## No Block Mode
+It is no surprise that the parallel computing beats the calculations on CPU AS LONG AS the overhead isn't high. We see this problem when the resolution is low $<2^7$. The higher the resolution the more CUDA can shine. But the real comparison between the two algorithm `unique` and `batch` shows that `batch` is significantly faster than unique when the program runs on CUDA backend. This is not the same when the program runs on CPU backend. For both M2 and Intel Core i9 chip the `unique` method is slightly faster than `batch`. However, the speedup is not significant at all.
+
+## Block Mode
+In the block mode, that the `batch` version is always faster than `unique` version. My PC couldn't handle when calculating spectra of resolution $2^{13}\times 2^{13}$ but it has nothing to do with the calculation time but rather a question for VRAM and RAM. 
+
 
