@@ -1,4 +1,30 @@
 # Benchmarking
+
+## Model
+To benchmark, I used a very simple quantum system. This model has no Hamiltonian, $H = 0$, with two collapse operators:
+```math
+d_1 = \begin{pmatrix}
+        0 & 1 \\
+        0 & 0
+    \end{pmatrix}\,, 
+d_2 = \begin{pmatrix}
+        0 & 0 \\
+        1 & 0
+    \end{pmatrix}
+```
+These collapse operators have strengths of $\gamma_1 = 0.3$ and $\gamma_2 = 0.5$ units. I only use one measurement (because later I will do a benchmark with the fist version of QuantumCatch written in ArrayFire and for a fair comparison I need identical systems and that version can only take one measurement operator.) 
+```math
+c_1 = \begin{pmatrix}
+        0 & 0 \\
+        0 & 1
+    \end{pmatrix}
+```
+with a strength of $\beta_1 = 5$ unit.
+
+
+The fact that the system is small makes the comparison between CPU and GPU calculation time misleading, however. Because CUDA shines for massive overloads and not small tensors like this example. I have to emphesize that **THIS IS NOT A COMPARISON BETWEEN GPU AND CPU BACKENDS BUT ONLY A COMPARISON BETWEEN TWO ALGORITHMS**:
+
+## Results
 In this document, I benchmark the two ways I calculate the propagator. Once is the conventional batches and vectorizing the matrix multiplications. The other way is "**unique_batches**" where we avoid the duplicates. From now on, I will call them `batch` and `unique` method. It is important to keep in mind that inside the `unique` method there is still the `batch` method.
 
 ARM64 MacBook : unique
@@ -121,4 +147,7 @@ NVIDIA GeForce RTX 4090 : unique
 |      2048 |       6.541375|
 |      4096 |      36.142656|
 |      8192 |     199.186671|
+
+
+# Conclusion
 
