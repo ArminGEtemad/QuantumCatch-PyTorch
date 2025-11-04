@@ -49,7 +49,7 @@ class SpectrumPlotter:
                             raise ValueError(f"Unknown plot_format: {fmt}")
 
                         ax.plot(freq_masked.cpu().numpy(), y)
-                        ax.set_xlabel("ω")
+                        ax.set_xlabel(r"$f$")
                         ax.set_ylabel(f"S{order}")
 
                 plt.tight_layout()
@@ -101,8 +101,8 @@ class SpectrumPlotter:
                             vmax=vmax
                         )
                         ax.set_title(title)
-                        ax.set_xlabel("ω₁")
-                        ax.set_ylabel("ω₂")
+                        ax.set_xlabel(r"$f_1$")
+                        ax.set_ylabel(r"$f_2$")
                         fig.colorbar(im, ax=ax)
 
                 plt.tight_layout()
@@ -155,8 +155,8 @@ class SpectrumPlotter:
                             vmax=vmax
                         )
                         ax.set_title(title)
-                        ax.set_xlabel("ω₁")
-                        ax.set_ylabel("ω₂")
+                        ax.set_xlabel(r"$f_1$")
+                        ax.set_ylabel(r"$f_2$")
                         fig.colorbar(im, ax=ax)
 
                 plt.tight_layout()
