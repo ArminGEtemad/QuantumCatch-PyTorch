@@ -186,32 +186,36 @@ def g_nu_batch(
 
     return torch.bmm(tmp, evecs_invb)
 
-def g_nu_batch_unique(
-        evals: Tensor,
-        evecs: Tensor,
-        evecs_inv: Tensor, 
-        zero_ind: Tensor, 
-        small_mask: Tensor, 
-        omega: Tensor
-) -> Tensor:
+def s1(
+        hamiltonian: Tensor, 
+        measure_dict: Dict[str, Tensor], 
+        beta_dict: Dict[str, float], 
+        measureOrder_dict: Dict[str, list[Tuple[str, str]]],
+        rho_0: Tensor,
+        backend: str,
+        key='s1'
+) -> Dict[str, Tensor]:
+    shape_hamiltonian = hamiltonian.shape[0]
+    used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
+    used_measure_dict = {k: measure_dict[k] for k in used_keys}
 
-    nu_flat = omega.reshape(-1)
-    nu_cpu  = nu_flat.detach().to(torch.float64).cpu().contiguous()
-    uniq_vals, inverse = torch.unique(nu_cpu, return_inverse=True)
+    a_dict = mathcal_a(hamiltonian, used_measure_dict, backend)
 
-    if uniq_vals.numel() == 0:
-        # Degenerate case; should not happen, but keep it safe
-        m = evals.numel()
-        return torch.zeros((0, m, m), dtype=evecs.dtype, device=evecs.device)
+    result_dict = {}
+    for op0_key in measureOrder_dict[key]:
+        a = a_dict[op0_key]
+        pref = (beta_dict[op0_key])**2
 
-    uniq = uniq_vals.to(device=omega.device, dtype=omega.dtype)
-    G_uniq = g_nu_batch(evals, evecs, evecs_inv, zero_ind, small_mask, uniq)
+        a_rho = a @ rho_0
+        tr = torch.trace(a_rho.reshape((shape_hamiltonian, shape_hamiltonian)))
 
-    # Reindex back to original order
-    inverse_dev = inverse.to(G_uniq.device)
-    out = G_uniq.index_select(0, inverse_dev)
-    return out.view(nu_flat.shape[0], *G_uniq.shape[1:])
-
+        if backend != 'cpu':
+            result_dict[(op0_key)] = (pref * tr).cpu().numpy() # save the result back in CPU
+        else:
+            result_dict[(op0_key)] = (pref * tr)
+    
+    return result_dict
+        
 def s2_batched(
         hamiltonian: Tensor, 
         liouvillian: Tensor, 
@@ -714,10 +718,13 @@ class SpectrumCalculator:
         self.omega = freq_to_circfreq(self.freq, self.backend)
         self.rho_0 = rho_steady(sys_config.hamiltonian, self.liouvillian, self.backend)
         self.requested_order_list = list(spe_config.order_combi.keys())
+        self.s1 = None
         self.s2 = None
         self.s3 = None
         self.s4 = None
 
+        if 's1' in self.requested_order_list:
+            self.s1 = self._compute_s1()
         if 's2' in self.requested_order_list:
             self.s2 = self._compute_s2()
         if 's3' in self.requested_order_list:
@@ -733,6 +740,17 @@ class SpectrumCalculator:
             self.sys_config.collapse_strength,
             self.sys_config.measurement_strength,
             self.backend
+        )
+    
+    def _compute_s1(self):
+        return s1(
+            self.sys_config.hamiltonian, 
+            self.sys_config.measurement_ops, 
+            self.sys_config.measurement_strength,
+            self.spe_config.order_combi,
+            self.rho_0,
+            self.backend,
+            key='s1'
         )
 
     def _compute_s2(self):
