@@ -187,34 +187,45 @@ def g_nu_batch(
     return torch.bmm(tmp, evecs_invb)
 
 def s1(
-        hamiltonian: Tensor, 
-        measure_dict: Dict[str, Tensor], 
-        beta_dict: Dict[str, float], 
-        measureOrder_dict: Dict[str, list[Tuple[str, str]]],
-        rho_0: Tensor,
-        backend: str,
-        key='s1'
+    hamiltonian: Tensor, 
+    measure_dict: Dict[str, Tensor], 
+    beta_dict: Dict[str, float], 
+    measureOrder_dict: Dict[str, list[Tuple[str]]],
+    rho_0: Tensor,
+    backend: str,
+    key: str = 's1'
 ) -> Dict[str, Tensor]:
     shape_hamiltonian = hamiltonian.shape[0]
-    used_keys = set(k for pair in measureOrder_dict[key] for k in pair)
+
+    # Normalize input to always be a list of tuples
+    order_list = [
+        (op,) if isinstance(op, str) else op
+        for op in measureOrder_dict[key]
+    ]
+
+    used_keys = set(k for pair in order_list for k in pair)
     used_measure_dict = {k: measure_dict[k] for k in used_keys}
 
     a_dict = mathcal_a(hamiltonian, used_measure_dict, backend)
 
     result_dict = {}
-    for op0_key in measureOrder_dict[key]:
-        a = a_dict[op0_key]
-        pref = (beta_dict[op0_key])**2
+    for op0_key in order_list:
+        op_name = op0_key[0]
+        a = a_dict[op_name]
+        pref = beta_dict[op_name] ** 2
 
         a_rho = a @ rho_0
         tr = torch.trace(a_rho.reshape((shape_hamiltonian, shape_hamiltonian)))
+        result = pref * tr
 
         if backend != 'cpu':
-            result_dict[(op0_key)] = (pref * tr).cpu().numpy() # save the result back in CPU
-        else:
-            result_dict[(op0_key)] = (pref * tr)
-    
+            result = result.cpu().numpy()
+
+        result_dict[op_name] = result
+
     return result_dict
+
+
         
 def s2_batched(
         hamiltonian: Tensor, 
