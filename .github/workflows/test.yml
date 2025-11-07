@@ -39,7 +39,7 @@ jobs:
       - name: Run example scripts
         run: |
           for file in examples/*.py; do
-            if [[ "$file" == *"spin-noise.py" ]]; then
+            if [[ "$file" == *"spin_noise.py" ]]; then
               echo "Skipping $file (too heavy for CI)"
               continue
             fi
