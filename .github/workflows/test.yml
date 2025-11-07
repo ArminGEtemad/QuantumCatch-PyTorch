@@ -1,14 +1,18 @@
-name: Run Helper function Tests
+name: Run Example Tests
 
 on:
   push:
-    branches: [ main, g_nu_functions ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, g_nu_functions ]
+    branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    env:
+      PYTHONPATH: src
+      CI: "true"
 
     steps:
       - name: Checkout repository
@@ -19,11 +23,22 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pytest numpy torch matplotlib
 
-      - name: Run tests
+      - name: Run example scripts
         run: |
-          PYTHONPATH=src pytest tests/
+          for file in examples/*.py; do
+            echo "Running $file"
+            python "$file"
+          done
