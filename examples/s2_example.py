@@ -33,6 +33,7 @@ spe_config = SpectrumConfig(
     f_max=f_max,
     order_combi=measure_order,
     s3_block=None,
+    s4_block=None,
     backend='cpu'
 )
 
