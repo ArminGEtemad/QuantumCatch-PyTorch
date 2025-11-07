@@ -39,6 +39,10 @@ jobs:
       - name: Run example scripts
         run: |
           for file in examples/*.py; do
+            if [[ "$file" == *"spin-noise.py" ]]; then
+              echo "Skipping $file (too heavy for CI)"
+              continue
+            fi
             echo "Running $file"
             python "$file"
           done
