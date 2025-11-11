@@ -100,5 +100,4 @@ The Speedup on NVIDIA GeForce RTX 4090:
 There is another version of batching that I have tried to test. It is the `g_nu_batch_unique`. In this way, I was trying to build something like cache so that only unique $G(\nu)$ ptpagators would be calculated and not duplicates. I will do an extensive test on it later and document the results seperately because it will not be direct comparison to the old Quantum-Catch but it is more comparison of two new versions. For now I will use the batching method and not the unique. 
 
 ### Spectra
-#### $S^{(2)}$
-#### $S^{(3)}$
+The calculation of spectra is not much faster thanks to the new approach. Using batches instead of slow python loops allows the calculation of the spectra much faster. The benchmark (using the same model as shown [here](unique_vs_conventional_batch.md)) proves the significant improvement of the runtime.
