@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
       - name: Cache pip packages
         uses: actions/cache@v4
@@ -35,6 +35,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest numpy torch matplotlib
+
+      - name: Install QuantumCatch-PyTorch
+        run: |
+          pip install -e .
+
+      - name: Verify import
+        run: |
+          python -c "import multichqc; print('QuantumCatch-PyTorch import successful')"
 
       - name: Run example scripts
         run: |
