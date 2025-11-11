@@ -1,10 +1,9 @@
 import torch
-from multichqc.system_config import SystemConfig
-from multichqc.input_config import SpectrumConfig
-from multichqc.spectra_calculator import SpectrumCalculator
-from multichqc.plot_config import PlotConfig
-from multichqc.spectra_plotter import SpectrumPlotter
-import matplotlib.pyplot as plt
+from multichqc import SystemConfig
+from multichqc import SpectrumConfig
+from multichqc import SpectrumCalculator
+from multichqc import PlotConfig
+from multichqc import SpectrumPlotter
 
 #----- EXAMPLE SYSTEM ------
 H = torch.tensor([[1., 0.], [0., -1.]]) * 0

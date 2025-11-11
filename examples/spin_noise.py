@@ -1,11 +1,11 @@
 from qutip import jmat, tensor, qeye
 import torch
 import numpy as np
-from multichqc.system_config import SystemConfig
-from multichqc.input_config import SpectrumConfig
-from multichqc.spectra_calculator import SpectrumCalculator
-from multichqc.plot_config import PlotConfig
-from multichqc.spectra_plotter import SpectrumPlotter
+from multichqc import SystemConfig
+from multichqc import SpectrumConfig
+from multichqc import SpectrumCalculator
+from multichqc import PlotConfig
+from multichqc import SpectrumPlotter
 
 # 2) Physical constants & parameters
 hbar = 6.582e-4    # eV·ps
