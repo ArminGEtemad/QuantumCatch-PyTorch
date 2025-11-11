@@ -101,3 +101,29 @@ There is another version of batching that I have tried to test. It is the `g_nu_
 
 ### Spectra
 The calculation of spectra is not much faster thanks to the new approach. Using batches instead of slow python loops allows the calculation of the spectra much faster. The benchmark (using the same model as shown [here](unique_vs_conventional_batch.md)) proves the significant improvement of the runtime.
+
+NVIDIA GeForce RTX 4090 : QuantumCatch New Version
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|        32 |       0.035057|
+|        64 |       0.034536|
+|       128 |       0.036333|
+|       256 |       0.047844|
+|       512 |       0.096085|
+|      1024 |       0.334867|
+
+NVIDIA GeForce RTX 4090 : QuantumCatch Old Version
+|Resolution |   Avg Time (s)|
+|-------------|-----------|
+|        32 |       8.772992|
+|        64 |       31.55624|
+|       128 |       136.98196|
+|       256 |       887.58218|
+|       512 |       6041.44942|
+|      1024 |       42220.36333|
+
+![Bench3](Bench2.png)
+
+Meaning that a calculation that needed more than 11 hours back then can now be done in less than a second!!!
+
+The new code doesn't use batching only for calculating the propagator but also in calculation of spectra. 

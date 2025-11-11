@@ -24,7 +24,7 @@ This library enables users to to simulate their quantum systems in a very genera
 How long the program need to calculate the spectra depends on the hardware, backend, resolution of the spectrum. To give user a feeling of the calculation time the program was tested on Apple M2 Pro Chip, 13th Gen Intel Core i9-13900KS as well as NVIDIA GeForce RTX 4090 (CUDA backend). Results are summarized [here](docs/unique_vs_conventional_batch.md). There you can find two algorithmic variants were benchmarked against each other too. These tests guided the decision to retain the faster and more stable algorithm in the current release.
 
 ## Installation
-Right now the package must be cloned and installed. The package will be installable via PiPy in the future. 
+Right now the package must be cloned and installed. The package will be installable via PyPi in the future. 
 ```bash
 git clone https://github.com/ArminGEtemad/QuantumCatch-PyTorch.git
 cd QuantumCatch-PyTorch
@@ -73,3 +73,16 @@ The next class is `SpectrumConfig`. In this class, you can configure everything 
 When the system and spectrum is configured, we are ready to calculate the spectra. To do that we feed both objects to `SpectrumCalculator` class. 
 
 It is possible to plot the results too. In order to do that, you need to configure the plot with `PlotConfig` class. The configuration only need the `f_min` (minimum frequency), `f_max` (maximum frequency), the orders you want to plot with `display_orders` as a list with integer values `2`, `3` and `4` that correspond to second, third and fourth order, respectively. You can also decide if you are only interested in the real part, imaginary part or both part of the spectrum by using `plot_format`. After the configuration, we make the object `SpectrumPlotter` with the configuration and the results from `SpectrumCalculator`. The function `display()` can the plot the results. 
+
+## Improvements
+To make sure that the new version can be very fast, different approaches were used and compared to one another. For example, the very fist version used ArrayFire Library to use CUDA backend (see [QuantumCatch](https://github.com/MarkusSifft/QuantumCatch)). This version mostly used Python for-loops to matrixize tensors and calculate spectra. The new approach, however, uses PyTorch and to matrixize tensors, analytical mathematical expression were derived first and then used in the program. Also the new version avoids python loops whenever possible and uses batching methods instead. This alone makes a significant difference that a calculation which needed 11 hours is now done in less than a second:
+![Bench3](docs/Bench2.png)
+
+There was an attempt to make the code run even faster by calculating only the unique combinations of frequencies, however, it failed due to overhead. All that is also documented [here](docs/unique_vs_conventional_batch.md).
+
+## Dependencies
+This library is guaranteed to work with the following dependencies and version:
+- Python 3.12.4
+- torch 2.4.1
+- matplotlib 3.8.4
+- numpy 1.26.4
