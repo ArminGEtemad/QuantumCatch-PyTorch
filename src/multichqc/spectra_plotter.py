@@ -14,6 +14,25 @@
 
 import matplotlib.pyplot as plt
 import torch
+import os
+import yaml
+import numpy as np
+from dataclasses import asdict
+
+def make_serializable(obj):
+    if isinstance(obj, torch.Tensor):
+        arr = obj.detach().cpu().numpy()
+        return arr.tolist()
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: make_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [make_serializable(v) for v in obj]
+    else:
+        return obj
+
+
 
 class SpectrumPlotter:
     def __init__(self, spec_calc, plot_config):
@@ -70,7 +89,6 @@ class SpectrumPlotter:
                 plt.show()
 
             if order == 3:
-                # --- S3: stacked heatmaps in one figure ---
                 freq_full = self.calc.freq
                 extent = (freq_full[0], freq_full[-1], freq_full[0], freq_full[-1])
 
@@ -176,5 +194,30 @@ class SpectrumPlotter:
                 plt.tight_layout()
                 plt.show()
 
-            else:
-                print(f"Order {order} is not yet supported.")
+    
+    def save(self, path: str):
+        os.makedirs(path, exist_ok=True)
+
+        sys_conf = make_serializable(asdict(self.calc.sys_config))
+        spe_conf = make_serializable(asdict(self.calc.spe_config))
+        config_data = {"system": sys_conf, "spectrum": spe_conf}
+
+        yaml_path = os.path.join(path, "config.yaml")
+        with open(yaml_path, "w") as f:
+            yaml.safe_dump(config_data, f, sort_keys=False, default_flow_style=True)
+
+        for order in [1, 2, 3, 4]:
+            key = f"s{order}"
+            spec_dict = getattr(self.calc, key, None)
+            if spec_dict is None:
+                continue
+
+            save_dict = {}
+            for ops, tensor in spec_dict.items():
+                name = "_".join(ops)
+                arr = tensor.detach().cpu().numpy() if isinstance(tensor, torch.Tensor) else tensor
+                save_dict[name] = arr
+
+            np.savez(os.path.join(path, f"spectrum_{key}.npz"), **save_dict)
+
+        print(f"Spectrum and config saved to: {path}")
