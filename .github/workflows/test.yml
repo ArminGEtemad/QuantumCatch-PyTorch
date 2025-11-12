@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy torch matplotlib
+          pip install pytest numpy torch matplotlib pyyaml
 
       - name: Install QuantumCatch-PyTorch
         run: |
