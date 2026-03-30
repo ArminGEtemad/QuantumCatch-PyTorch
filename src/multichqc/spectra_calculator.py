@@ -638,21 +638,25 @@ def s4_corr_batched(
             block_sum = torch.zeros(b_b, dtype=COMPLEX64_TYPE, device=dev)
 
             for n, m, l, k in perms4:
-                # pick the two s-columns by pair indices
-                s_alpha = s_nk[:, pair2idx[(n, k)]]
-                s_beta  = s_nk[:, pair2idx[(m, l)]]
-
-                # outer product over α and β (d_L, d_L, 1)
-                num = s_alpha.view(d_L, 1, 1) * s_beta.view(1, d_L, 1)
-
                 # frequency combinations as per publication
                 nu1 = nu_i[l] + nu_i[m] + nu_i[n]
                 nu2 = nu_i[m] + nu_i[n]
                 nu3 = nu_i[n]
 
                 if which == "1":
+                    # pick the two s-columns by pair indices
+                    s_alpha = s_nk[:, pair2idx[(n, k)]]
+                    s_beta  = s_nk[:, pair2idx[(m, l)]]
+                    # outer product over α and β (d_L, d_L, 1)
+                    num = s_alpha.view(d_L, 1, 1) * s_beta.view(1, d_L, 1)
                     denom = (lam_a + nu1) * (lam_a + nu3) * (lam_a + lam_b + nu2)
+                    
                 else:  # which == "2"
+                    # pick the two s-columns by pair indices
+                    s_alpha = s_nk[:, pair2idx[(n, l)]]
+                    s_beta  = s_nk[:, pair2idx[(m, k)]]
+                    # outer product over α and β (d_L, d_L, 1)
+                    num = s_alpha.view(d_L, 1, 1) * s_beta.view(1, d_L, 1)
                     denom = (lam_b + nu1) * (lam_a + nu3) * (lam_a + lam_b + nu2)
 
                 block_sum += (num / denom).sum((0, 1))
